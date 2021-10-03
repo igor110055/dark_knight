@@ -12,14 +12,13 @@ order_book = dict()
 cached_responses = list()
 last_update_ids = dict()
 best_prices = dict()
+strategies = dict()
+symbols = dict()
 
-
-async def main(natural, synthetic):
-    natural = natural.upper()
-    synthetic = {c.upper(): side for c, side in synthetic.items()}
-    symbols = [natural] + list(synthetic.keys())
+async def main(symbols):
     for symbol in symbols:
-        best_prices[symbol.upper()] = dict(bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
+        best_prices[symbol] = dict(
+            bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
 
     async with websockets.connect(
             "wss://stream.binance.com:9443/ws") as websocket:
@@ -44,17 +43,17 @@ async def main(natural, synthetic):
 
             if symbol not in last_update_ids:
                 cached_responses.append(response)
-                get_order_book_snapshot(symbol, natural, synthetic)
+                get_order_book_snapshot(symbol)
                 continue
 
-            update_order_book(response, natural, synthetic)
+            update_order_book(response)
             # end_sequence = response['u']
             # start_sequence = response['U']
             # print(last_update_id)
             # print(response)
 
 
-def update_order_book(response, natural, synthetic):
+def update_order_book(response):
     end_sequence = response['u']
     symbol = response['s']
 
@@ -91,10 +90,21 @@ def update_order_book(response, natural, synthetic):
         'bid': [best_bid_price, best_bid_size],
         'ask': [best_ask_price, best_ask_size]
     }
+
+    if symbol in symbols:
+        natural = strategies.get(symbol)
+        synthetics = [strategies[s] for s in symbols[symbol]]
+        print('symbol:', symbol)
+        print('natural:', natural)
+        print('synthetics:', synthetics)
+        print('-'*30)
+
+    # TODO: check arbitrage opportunities
     # print(symbol, best_bid_price, best_bid_size, best_ask_price, best_ask_size)
 
     # print(best_prices)
 
+def check_arbitrage(natural, synthetic):
     (left_curr, left_normal), (right_curr, right_normal) = synthetic.items()
 
     natural_bid = best_prices[natural]['bid'][0]
@@ -144,10 +154,12 @@ def update_order_book(response, natural, synthetic):
     # TODO: add available size
 
     if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > 0.2:
-        print(symbol, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
+        print(natural, synthetic, 'buy synthetic, sell natural',
+              natural_bid, synthetic_ask, diff_perc)
 
     if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > 0.2:
-        print(symbol, synthetic, 'buy natural, sell synthetic', synthetic_bid, natural_ask, diff_perc)
+        print(natural, synthetic, 'buy natural, sell synthetic',
+              synthetic_bid, natural_ask, diff_perc)
 
     # pprint(
     #     sorted(order_book['bids'].items(),
@@ -158,7 +170,7 @@ def update_order_book(response, natural, synthetic):
     # check start_sequence increment
 
 
-def get_order_book_snapshot(symbol, natural, synthetic):
+def get_order_book_snapshot(symbol):
     global last_update_id
 
     response = requests.get(
@@ -173,7 +185,7 @@ def get_order_book_snapshot(symbol, natural, synthetic):
     order_book[symbol] = dict(bids=bids, asks=asks)
 
     for response in cached_responses:
-        update_order_book(response, natural, synthetic)
+        update_order_book(response)
 
 
 async def dummy():
@@ -183,15 +195,38 @@ async def dummy():
     tasks = []
     for natural, synthetics in triangles.items():
         print(natural)
-        for synthetic in synthetics:
-            tasks.append(asyncio.create_task(main(natural, synthetic)))
-        i+=1
+        strategies[natural] = synthetics
+
+        i += 1
 
         if i == 6:
             break
 
     # print(len(tasks))
-    await asyncio.gather(*tasks)
+
+    # print(strategies)
+
+    for natural, synthetics in strategies.items():
+        symbols[natural] = {}
+        for synthetic in synthetics:
+            try:
+                for symbol, normal in synthetic.items():
+                    if symbol not in symbols:
+                        symbols[symbol] = {}
+                    symbols[symbol][natural] = normal
+            except:
+                pdb.set_trace()
+
+    # print(symbols)
+
+    # for symbol in symbols.keys():
+    #     tasks.append(asyncio.create_task(main(symbol)))
+
+    # await asyncio.gather(*tasks)
+
+    await asyncio.create_task(main(symbols))
+
+import pdb
 
 if __name__ == '__main__':
     # symbols = ['bnbusdt', 'troyusdt', 'troybnb']
