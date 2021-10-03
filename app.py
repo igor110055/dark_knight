@@ -6,6 +6,8 @@ from pprint import pprint
 import requests
 import websockets
 
+from triangle_finder import get_triangles
+
 order_book = dict()
 cached_responses = list()
 last_update_ids = dict()
@@ -17,7 +19,7 @@ async def main(natural, synthetic):
     synthetic = {c.upper(): side for c, side in synthetic.items()}
     symbols = [natural] + list(synthetic.keys())
     for symbol in symbols:
-        best_prices[symbol.upper()] = dict(bid=[0, 0], ask=[0, 0])
+        best_prices[symbol.upper()] = dict(bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
 
     async with websockets.connect(
             "wss://stream.binance.com:9443/ws") as websocket:
@@ -119,29 +121,33 @@ def update_order_book(response, natural, synthetic):
 
     if left_normal:
         left_synthetic_ask = best_prices[left_curr]['bid'][0]
+        left_synthetic_ask_size = best_prices[left_curr]['bid'][1]
     else:
         ask = best_prices[left_curr]['ask'][0]
         if not ask:
             return
         left_synthetic_ask = 1 / ask
+        left_synthetic_ask_size = best_prices[left_curr]['ask'][1]
 
     if right_normal:
         right_synthetic_ask = best_prices[right_curr]['bid'][0]
+        right_synthetic_ask_size = best_prices[right_curr]['bid'][1]
     else:
         ask = best_prices[right_curr]['ask'][0]
         if not ask:
             return
         right_synthetic_ask = 1 / ask
+        right_synthetic_ask_size = best_prices[right_curr]['ask'][1]
 
     synthetic_bid = left_synthetic_ask * right_synthetic_ask or 1
 
-    if (diff := natural_bid - synthetic_ask) > 0:
-        print('Buy synthetic, sell natural', natural_bid, synthetic_ask,
-              diff / synthetic_ask * 100)
+    # TODO: add available size
 
-    if (diff := synthetic_bid - natural_ask) > 0:
-        print('Buy natural, sell synthetic', synthetic_bid, natural_ask,
-              diff / natural_ask * 100)
+    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > 0.2:
+        print(symbol, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
+
+    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > 0.2:
+        print(symbol, synthetic, 'buy natural, sell synthetic', synthetic_bid, natural_ask, diff_perc)
 
     # pprint(
     #     sorted(order_book['bids'].items(),
@@ -170,8 +176,24 @@ def get_order_book_snapshot(symbol, natural, synthetic):
         update_order_book(response, natural, synthetic)
 
 
+async def dummy():
+    triangles = get_triangles()
+
+    i = 0
+    tasks = []
+    for natural, synthetics in triangles.items():
+        print(natural)
+        for synthetic in synthetics:
+            tasks.append(asyncio.create_task(main(natural, synthetic)))
+        i+=1
+
+        if i == 6:
+            break
+
+    # print(len(tasks))
+    await asyncio.gather(*tasks)
+
 if __name__ == '__main__':
     # symbols = ['bnbusdt', 'troyusdt', 'troybnb']
-    natural = 'waxpusdt'
-    synthetic = {'waxpbnb': True, 'bnbusdt': True}
-    asyncio.run(main(natural, synthetic))
+
+    asyncio.run(dummy())
