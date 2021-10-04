@@ -1,12 +1,24 @@
+import pdb
 import asyncio
 import json
 from decimal import Decimal
 from pprint import pprint
 
+import time
+
 import requests
 import websockets
 
+import threading
+import functools
+
 from triangle_finder import get_triangles
+
+from concurrent.futures import ProcessPoolExecutor
+
+from ccxt import binance
+from dotenv import load_dotenv
+import os
 
 order_book = dict()
 cached_responses = list()
@@ -15,13 +27,19 @@ best_prices = dict()
 strategies = dict()
 symbols = dict()
 
+load_dotenv()
+binance_client = binance({'apiKey': os.getenv('API_KEY'), 'secret': os.getenv('SECRET_KEY')})
+
+# last_pong = time.time()
+
 async def main(symbols):
+    # global last_pong
     for symbol in symbols:
         best_prices[symbol] = dict(
             bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
 
     async with websockets.connect(
-            "wss://stream.binance.com:9443/ws") as websocket:
+            "wss://stream.binance.com:9443/ws", ping_timeout=60*15) as websocket:
         params = [f"{symbol.lower()}@depth@100ms" for symbol in symbols]
         print(params)
         payload = {
@@ -34,9 +52,15 @@ async def main(symbols):
         await websocket.send(json.dumps(payload))
         while True:
             response = await websocket.recv()
+
+            # if (now := time.time()) > last_pong + 15:
+            #     await websocket.pong()
+            #     last_pong = now
+
             response = json.loads(response)
 
             if response.get('e') != 'depthUpdate':
+                print(response)
                 continue
 
             symbol = response['s']
@@ -91,23 +115,46 @@ def update_order_book(response):
         'ask': [best_ask_price, best_ask_size]
     }
 
-    if symbol in symbols:
-        natural = strategies.get(symbol)
-        synthetics = [strategies[s] for s in symbols[symbol]]
-        print('symbol:', symbol)
-        print('natural:', natural)
-        print('synthetics:', synthetics)
-        print('-'*30)
+    synthetics = strategies.get(symbol)
+    if not synthetics:
+        return
+
+    for synthetic in synthetics:
+        check_arbitrage(symbol, synthetic, 0.4)
+
+    for s in symbols[symbol]:
+        synthetics = strategies[s]
+        for synthetic in synthetics:
+            check_arbitrage(symbol, synthetic, 0.4)
+
+    # if symbol in symbols:
+    #     natural = strategies.get(symbol)
+    #     if not natural:
+    #         return
+
+    #     synthetics = [strategies[s] for s in symbols[symbol]]
+    #     print('symbol:', symbol)
+    #     print('natural:', natural)
+    #     print('synthetics:', synthetics)
+    #     print('-'*30)
 
     # TODO: check arbitrage opportunities
     # print(symbol, best_bid_price, best_bid_size, best_ask_price, best_ask_size)
 
     # print(best_prices)
 
-def check_arbitrage(natural, synthetic):
-    (left_curr, left_normal), (right_curr, right_normal) = synthetic.items()
+
+def get_strategy(symbol):
+    return strategies.get(symbol)
+
+
+def check_arbitrage(natural, synthetic, target_perc=0.5):
+    (left_curr, (left_normal, left_assets)), (right_curr, (right_normal, right_assets)) = synthetic.items()
 
     natural_bid = best_prices[natural]['bid'][0]
+
+    if not all(curr in best_prices for curr in [natural, left_curr, right_curr]):
+        return
 
     if left_normal:
         left_synthetic_ask = best_prices[left_curr]['ask'][0]
@@ -116,6 +163,7 @@ def check_arbitrage(natural, synthetic):
         if not bid:
             return
         left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
+        left_synthetic_ask_size = 1 / best_prices[left_curr]['bid'][1]
 
     if right_normal:
         right_synthetic_ask = best_prices[right_curr]['ask'][0]
@@ -124,8 +172,10 @@ def check_arbitrage(natural, synthetic):
         if not bid:
             return
         right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
+        right_synthetic_ask_size = 1 / best_prices[right_curr]['bid'][1]
 
     synthetic_ask = left_synthetic_ask * right_synthetic_ask or 1
+    synthetic_ask_size = Decimal('10') / synthetic_ask
 
     natural_ask = best_prices[natural]['ask'][0] or 1
 
@@ -137,7 +187,7 @@ def check_arbitrage(natural, synthetic):
         if not ask:
             return
         left_synthetic_ask = 1 / ask
-        left_synthetic_ask_size = best_prices[left_curr]['ask'][1]
+        left_synthetic_ask_size = 1 / best_prices[left_curr]['ask'][1]
 
     if right_normal:
         right_synthetic_ask = best_prices[right_curr]['bid'][0]
@@ -147,17 +197,87 @@ def check_arbitrage(natural, synthetic):
         if not ask:
             return
         right_synthetic_ask = 1 / ask
-        right_synthetic_ask_size = best_prices[right_curr]['ask'][1]
+        right_synthetic_ask_size = 1 / best_prices[right_curr]['ask'][1]
 
     synthetic_bid = left_synthetic_ask * right_synthetic_ask or 1
+    synthetic_ask_size = Decimal('10') / synthetic_bid  # TODO: extend to non USDT quote
 
     # TODO: add available size
 
-    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > 0.2:
-        print(natural, synthetic, 'buy synthetic, sell natural',
-              natural_bid, synthetic_ask, diff_perc)
+    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < 0.8:
+        print(natural, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
+        left_order = None
+        post_left_synthetic_order = None
 
-    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > 0.2:
+        print(natural, natural[-4:] != 'USDT')
+        if natural[-4:] != 'USDT':
+            return
+
+        # pdb.set_trace()
+        if left_normal:
+            if 'USDT' in left_assets:
+                if left_assets[1] == 'USDT':
+                    left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': 20.0})
+                else:
+                    left_order = binance_client.create_market_sell_order(left_curr, 20.0)
+            else:
+                post_left_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': quote_quantity})
+        else:
+            bid = best_prices[left_curr]['bid'][0]
+            if not bid:
+                return
+            left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
+            if 'USDT' in left_assets:
+                if left_assets[1] == 'USDT':
+                    left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': 20.0})
+                else:
+                    left_order = binance_client.create_market_sell_order(left_curr, 20.0)
+            else:
+                post_left_synthetic_order = lambda quantity:binance_client.create_market_sell_order(left_curr, quantity)
+
+        right_order = None
+        post_right_synthetic_order = None
+        if right_normal:
+            if 'USDT' in right_assets:
+                if right_assets[1] == 'USDT':
+                    right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': 20.0})
+                else:
+                    right_order = binance_client.create_market_sell_order(right_curr, 20.0)
+            else:
+                post_right_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': quote_quantity})
+            right_synthetic_ask = best_prices[right_curr]['ask'][0]
+        else:
+            bid = best_prices[right_curr]['bid'][0]
+            if not bid:
+                return
+            right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
+            if 'USDT' in right_assets:
+                if right_assets[1] == 'USDT':
+                    right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': 20.0})
+                else:
+                    right_order = binance_client.create_market_sell_order(right_curr, 20.0)
+            else:
+                post_right_synthetic_order = lambda quantity:binance_client.create_market_sell_order(right_curr, quantity)
+
+        last_order = None
+        if left_order and not right_order:
+            last_order = post_right_synthetic_order(left_order['amount'])
+        elif right_order and not left_order:
+            last_order = post_left_synthetic_order(right_order['amount'])
+        else:
+            last_order = right_order
+
+        if last_order:
+            natural_order = binance_client.create_market_sell_order(natural, last_order['amount'])
+
+        pdb.set_trace()
+
+        print(left_order, right_order, natural_order)
+
+        raise Exception
+
+
+    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < 0.8:
         print(natural, synthetic, 'buy natural, sell synthetic',
               synthetic_bid, natural_ask, diff_perc)
 
@@ -177,7 +297,11 @@ def get_order_book_snapshot(symbol):
         f"https://api.binance.com/api/v3/depth?symbol={symbol}")
     data = response.json()
 
-    last_update_ids[symbol] = data['lastUpdateId']
+    try:
+        last_update_ids[symbol] = data['lastUpdateId']
+    except Exception as e:
+        print(data)
+        raise e
 
     bids = {Decimal(price): Decimal(size) for price, size in data['bids']}
     asks = {Decimal(price): Decimal(size) for price, size in data['asks']}
@@ -188,19 +312,19 @@ def get_order_book_snapshot(symbol):
         update_order_book(response)
 
 
-async def dummy():
+def dummy():
+    # TODO: pickle
     triangles = get_triangles()
 
     i = 0
-    tasks = []
     for natural, synthetics in triangles.items():
         print(natural)
         strategies[natural] = synthetics
 
         i += 1
 
-        if i == 6:
-            break
+        # if i == 10:
+        #     break
 
     # print(len(tasks))
 
@@ -224,11 +348,30 @@ async def dummy():
 
     # await asyncio.gather(*tasks)
 
-    await asyncio.create_task(main(symbols))
+    # for symbol in list(symbols.items())[::200]:
 
-import pdb
+    steps = 200
+    ts = []
+    count = 0
+    tasks = []
+    for i in range(0, len(symbols), steps):
+        _symbols = dict(list(symbols.items())[i:i+steps])
+        # tasks.append(asyncio.create_task(main(_symbols)))
+        t = threading.Thread(target=asyncio.run, args=(main(_symbols), ))
+        t.start()
+        count += 1
+        if count == 5:
+            break
+        ts.append(t)
+
+    # await asyncio.gather(*tasks)
+
+    for t in ts:
+        t.join()
+
 
 if __name__ == '__main__':
-    # symbols = ['bnbusdt', 'troyusdt', 'troybnb']
-
-    asyncio.run(dummy())
+    # symbols = ['bnUSDTt', 'troyusdt', 'troybnb']
+# 
+    # asyncio.run(dummy())
+    dummy()

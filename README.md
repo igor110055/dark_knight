@@ -6,3 +6,10 @@ WebSocket connections have a limit of 10 incoming messages per second.
 A connection that goes beyond the limit will be disconnected; IPs that are repeatedly disconnected may be banned.
 
 A single connection can listen to a maximum of 200 streams.
+
+---
+1. get available trading size
+2. estimate profit
+(3. add age of order to order book)
+4. estimate probability of making profit (available size and age of order)
+5. post related limit order to chain the reaction (STORM!)

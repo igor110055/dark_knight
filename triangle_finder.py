@@ -40,7 +40,7 @@ def get_triangles():
                 right_symbol = right_edge['symbol']
                 right_normal = right_assets[0] == assets[0] or right_assets[1] == assets[1]
 
-                synthetics.append({left_symbol: left_normal, right_symbol: right_normal})
+                synthetics.append({left_symbol: (left_normal, left_assets), right_symbol: (right_normal, right_assets)})
 
         triangle_assets[original] = synthetics
 
