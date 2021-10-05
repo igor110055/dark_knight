@@ -30,10 +30,15 @@ symbols = dict()
 load_dotenv()
 binance_client = binance({'apiKey': os.getenv('API_KEY'), 'secret': os.getenv('SECRET_KEY')})
 
+fee_factor = Decimal('1') / Decimal('0.999') / Decimal('0.999') * Decimal('1.00001')
+
+trade_count = 0
+
 # last_pong = time.time()
 
 async def main(symbols):
     # global last_pong
+    global trade_count
     for symbol in symbols:
         best_prices[symbol] = dict(
             bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
@@ -50,7 +55,7 @@ async def main(symbols):
             "id": 1
         }
         await websocket.send(json.dumps(payload))
-        while True:
+        while trade_count < 10:
             response = await websocket.recv()
 
             # if (now := time.time()) > last_pong + 15:
@@ -116,16 +121,20 @@ def update_order_book(response):
     }
 
     synthetics = strategies.get(symbol)
+    # not a triangle
     if not synthetics:
         return
 
     for synthetic in synthetics:
         check_arbitrage(symbol, synthetic, 0.4)
 
-    for s in symbols[symbol]:
-        synthetics = strategies[s]
+    # check arbitrage of symbol being a synthetic
+    for natural_symbol in symbols[symbol]:
+        # TODO: wrong, should only get related natural synthetics
+        synthetics = strategies[natural_symbol]
         for synthetic in synthetics:
-            check_arbitrage(symbol, synthetic, 0.4)
+            if symbol in synthetic:
+                check_arbitrage(natural_symbol, synthetic, 0.4)
 
     # if symbol in symbols:
     #     natural = strategies.get(symbol)
@@ -144,13 +153,14 @@ def update_order_book(response):
     # print(best_prices)
 
 
-def get_strategy(symbol):
-    return strategies.get(symbol)
+def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
+    global event
+    global trade_count
 
-
-def check_arbitrage(natural, synthetic, target_perc=0.5):
     (left_curr, (left_normal, left_assets)), (right_curr, (right_normal, right_assets)) = synthetic.items()
 
+    if natural not in best_prices:
+        return
     natural_bid = best_prices[natural]['bid'][0]
 
     if not all(curr in best_prices for curr in [natural, left_curr, right_curr]):
@@ -204,8 +214,9 @@ def check_arbitrage(natural, synthetic, target_perc=0.5):
 
     # TODO: add available size
 
-    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < 0.8:
+    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < upper_bound:
         print(natural, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
+
         left_order = None
         post_left_synthetic_order = None
 
@@ -214,70 +225,65 @@ def check_arbitrage(natural, synthetic, target_perc=0.5):
             return
 
         # pdb.set_trace()
-        if left_normal:
-            if 'USDT' in left_assets:
-                if left_assets[1] == 'USDT':
-                    left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': 20.0})
-                else:
-                    left_order = binance_client.create_market_sell_order(left_curr, 20.0)
+        base_asset, quote_asset = left_assets
+        if 'USDT' in left_assets:
+            if quote_asset == 'USDT':
+                left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': usdt_amount*fee_factor})
             else:
-                post_left_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': quote_quantity})
+                left_order = binance_client.create_market_sell_order(left_curr, usdt_amount*fee_factor)
         else:
-            bid = best_prices[left_curr]['bid'][0]
-            if not bid:
-                return
-            left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
-            if 'USDT' in left_assets:
-                if left_assets[1] == 'USDT':
-                    left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': 20.0})
-                else:
-                    left_order = binance_client.create_market_sell_order(left_curr, 20.0)
+            if left_normal:
+                post_left_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': quote_quantity})
             else:
+                bid = best_prices[left_curr]['bid'][0]
+                if not bid:
+                    return
+                left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
+
                 post_left_synthetic_order = lambda quantity:binance_client.create_market_sell_order(left_curr, quantity)
 
         right_order = None
         post_right_synthetic_order = None
-        if right_normal:
-            if 'USDT' in right_assets:
-                if right_assets[1] == 'USDT':
-                    right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': 20.0})
-                else:
-                    right_order = binance_client.create_market_sell_order(right_curr, 20.0)
+
+
+        base_asset, quote_asset = right_assets
+        if 'USDT' in right_assets:
+            if quote_asset == 'USDT':
+                right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': usdt_amount*fee_factor})
             else:
-                post_right_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': quote_quantity})
-            right_synthetic_ask = best_prices[right_curr]['ask'][0]
+                right_order = binance_client.create_market_sell_order(right_curr, usdt_amount*fee_factor)
         else:
-            bid = best_prices[right_curr]['bid'][0]
-            if not bid:
-                return
-            right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
-            if 'USDT' in right_assets:
-                if right_assets[1] == 'USDT':
-                    right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': 20.0})
-                else:
-                    right_order = binance_client.create_market_sell_order(right_curr, 20.0)
+            if right_normal:
+                post_right_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': quote_quantity})
+                right_synthetic_ask = best_prices[right_curr]['ask'][0]
             else:
+                bid = best_prices[right_curr]['bid'][0]
+                if not bid:
+                    return
+                right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
+                # right_synthetic_ask_amount = best_prices[right_curr]['bid'][1]
                 post_right_synthetic_order = lambda quantity:binance_client.create_market_sell_order(right_curr, quantity)
 
         last_order = None
         if left_order and not right_order:
-            last_order = post_right_synthetic_order(left_order['amount'])
+            amount = Decimal(left_order['amount'])
+            if left_normal:
+                amount *= Decimal('0.999')
+            last_order = post_right_synthetic_order(amount)
         elif right_order and not left_order:
-            last_order = post_left_synthetic_order(right_order['amount'])
-        else:
-            last_order = right_order
+            amount = Decimal(right_order['amount'])
+            if right_normal:
+                amount *= Decimal('0.999')
+            last_order = post_left_synthetic_order(amount)
 
         if last_order:
-            natural_order = binance_client.create_market_sell_order(natural, last_order['amount'])
+            natural_order = binance_client.create_market_sell_order(natural, Decimal(last_order['amount'])*Decimal('0.999'))
 
-        pdb.set_trace()
-
-        print(left_order, right_order, natural_order)
-
-        raise Exception
+            print(left_order, right_order, natural_order)
+            trade_count += 1
 
 
-    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < 0.8:
+    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < upper_bound:
         print(natural, synthetic, 'buy natural, sell synthetic',
               synthetic_bid, natural_ask, diff_perc)
 
