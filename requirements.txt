@@ -2,3 +2,5 @@ requests
 websockets
 networkx
 matplotlib
+ccxt
+dotenv

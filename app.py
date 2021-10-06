@@ -1,24 +1,19 @@
-import pdb
 import asyncio
 import json
+import os
+import pdb
+import threading
 from decimal import Decimal
-from pprint import pprint
-
-import time
 
 import requests
 import websockets
-
-import threading
-import functools
-
-from triangle_finder import get_triangles
-
-from concurrent.futures import ProcessPoolExecutor
-
 from ccxt import binance
 from dotenv import load_dotenv
-import os
+
+from time import time
+
+from order_engine import OrderEngine
+from triangle_finder import get_triangles
 
 order_book = dict()
 cached_responses = list()
@@ -34,19 +29,31 @@ fee_factor = Decimal('1') / Decimal('0.999') / Decimal('0.999') * Decimal('1.000
 
 trade_count = 0
 
+TRADE_LIMIT = 2
+
 # last_pong = time.time()
+
+engine = OrderEngine(binance_client)
+
+trading = False
+lock = threading.RLock()
+
+session = requests.Session()
+
+def get(url):
+    return session.get(url)
 
 async def main(symbols):
     # global last_pong
     global trade_count
     for symbol in symbols:
         best_prices[symbol] = dict(
-            bid=[Decimal('0'), Decimal('0')], ask=[Decimal('0'), Decimal('0')])
+            bid=[Decimal('0'), (Decimal('0'), 0)], ask=[Decimal('0'), (Decimal('0'), 0)])
 
     async with websockets.connect(
             "wss://stream.binance.com:9443/ws", ping_timeout=60*15) as websocket:
         params = [f"{symbol.lower()}@depth@100ms" for symbol in symbols]
-        print(params)
+        # print(params)
         payload = {
             "method": "SUBSCRIBE",
             # "params": ["btcusdt@aggTrade", "btcusdt@depth"],
@@ -55,7 +62,7 @@ async def main(symbols):
             "id": 1
         }
         await websocket.send(json.dumps(payload))
-        while trade_count < 10:
+        while trade_count < TRADE_LIMIT:
             response = await websocket.recv()
 
             # if (now := time.time()) > last_pong + 15:
@@ -93,11 +100,17 @@ def update_order_book(response):
     start_sequence = response['U']
 
     ob = order_book[symbol]
+
+    last_best_bid_price = best_prices[symbol]['bid'][0]
+    last_best_ask_price = best_prices[symbol]['ask'][0]
+
+    epoch = response['E']
+
     for price, size in response['b']:
         price = Decimal(price)
         size = Decimal(size)
         if size:
-            ob['bids'][price] = size
+            ob['bids'][price] = (size, epoch)
         else:
             ob['bids'].pop(price, None)
 
@@ -106,7 +119,7 @@ def update_order_book(response):
         size = Decimal(size)
         if size:
             # update event, reconcile with trade data
-            ob['asks'][price] = size
+            ob['asks'][price] = (size, epoch)
         else:
             # cancel event
             ob['asks'].pop(price, None)
@@ -119,6 +132,9 @@ def update_order_book(response):
         'bid': [best_bid_price, best_bid_size],
         'ask': [best_ask_price, best_ask_size]
     }
+
+    if best_bid_price < last_best_bid_price and best_ask_price > last_best_ask_price:
+        return
 
     synthetics = strategies.get(symbol)
     # not a triangle
@@ -155,6 +171,7 @@ def update_order_book(response):
 
 def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
     global event
+    global trading
     global trade_count
 
     (left_curr, (left_normal, left_assets)), (right_curr, (right_normal, right_assets)) = synthetic.items()
@@ -173,7 +190,8 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
         if not bid:
             return
         left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
-        left_synthetic_ask_size = 1 / best_prices[left_curr]['bid'][1]
+        left_synthetic_ask_size = 1 / best_prices[left_curr]['bid'][1][0]
+        left_synthetic_ask_epoch = best_prices[left_curr]['bid'][1][1]
 
     if right_normal:
         right_synthetic_ask = best_prices[right_curr]['ask'][0]
@@ -182,7 +200,8 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
         if not bid:
             return
         right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
-        right_synthetic_ask_size = 1 / best_prices[right_curr]['bid'][1]
+        right_synthetic_ask_size = 1 / best_prices[right_curr]['bid'][1][0]
+        right_synthetic_ask_epoch = best_prices[right_curr]['bid'][1][1]
 
     synthetic_ask = left_synthetic_ask * right_synthetic_ask or 1
     synthetic_ask_size = Decimal('10') / synthetic_ask
@@ -191,23 +210,27 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
 
     if left_normal:
         left_synthetic_ask = best_prices[left_curr]['bid'][0]
-        left_synthetic_ask_size = best_prices[left_curr]['bid'][1]
+        left_synthetic_ask_size = best_prices[left_curr]['bid'][1][0]
+        left_synthetic_ask_epoch = best_prices[left_curr]['bid'][1][1]
     else:
         ask = best_prices[left_curr]['ask'][0]
         if not ask:
             return
         left_synthetic_ask = 1 / ask
-        left_synthetic_ask_size = 1 / best_prices[left_curr]['ask'][1]
+        left_synthetic_ask_size = 1 / best_prices[left_curr]['ask'][1][0]
+        left_synthetic_ask_epoch = best_prices[left_curr]['ask'][1][1]
 
     if right_normal:
         right_synthetic_ask = best_prices[right_curr]['bid'][0]
-        right_synthetic_ask_size = best_prices[right_curr]['bid'][1]
+        right_synthetic_ask_size = best_prices[right_curr]['bid'][1][0]
+        right_synthetic_ask_epoch = best_prices[right_curr]['bid'][1][1]
     else:
         ask = best_prices[right_curr]['ask'][0]
         if not ask:
             return
         right_synthetic_ask = 1 / ask
-        right_synthetic_ask_size = 1 / best_prices[right_curr]['ask'][1]
+        right_synthetic_ask_size = 1 / best_prices[right_curr]['ask'][1][0]
+        right_synthetic_ask_epoch = best_prices[right_curr]['bid'][1][1]
 
     synthetic_bid = left_synthetic_ask * right_synthetic_ask or 1
     synthetic_ask_size = Decimal('10') / synthetic_bid  # TODO: extend to non USDT quote
@@ -215,77 +238,18 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
     # TODO: add available size
 
     if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < upper_bound:
-        print(natural, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
+        # print(natural, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
 
-        left_order = None
-        post_left_synthetic_order = None
+        if not trading:
+            print('thread:', threading.get_native_id(), time(), natural, synthetic)
+            trading = True
+            if engine.buy_synthetic_sell_natural(natural, synthetic, best_prices):
+                trade_count += 1
+            trading = False
 
-        print(natural, natural[-4:] != 'USDT')
-        if natural[-4:] != 'USDT':
-            return
-
-        # pdb.set_trace()
-        base_asset, quote_asset = left_assets
-        if 'USDT' in left_assets:
-            if quote_asset == 'USDT':
-                left_order = binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': usdt_amount*fee_factor})
-            else:
-                left_order = binance_client.create_market_sell_order(left_curr, usdt_amount*fee_factor)
-        else:
-            if left_normal:
-                post_left_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(left_curr, None, params={'quoteOrderQty': quote_quantity})
-            else:
-                bid = best_prices[left_curr]['bid'][0]
-                if not bid:
-                    return
-                left_synthetic_ask = 1 / best_prices[left_curr]['bid'][0]
-
-                post_left_synthetic_order = lambda quantity:binance_client.create_market_sell_order(left_curr, quantity)
-
-        right_order = None
-        post_right_synthetic_order = None
-
-
-        base_asset, quote_asset = right_assets
-        if 'USDT' in right_assets:
-            if quote_asset == 'USDT':
-                right_order = binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': usdt_amount*fee_factor})
-            else:
-                right_order = binance_client.create_market_sell_order(right_curr, usdt_amount*fee_factor)
-        else:
-            if right_normal:
-                post_right_synthetic_order = lambda quote_quantity:binance_client.create_market_buy_order(right_curr, None, params={'quoteOrderQty': quote_quantity})
-                right_synthetic_ask = best_prices[right_curr]['ask'][0]
-            else:
-                bid = best_prices[right_curr]['bid'][0]
-                if not bid:
-                    return
-                right_synthetic_ask = 1 / best_prices[right_curr]['bid'][0]
-                # right_synthetic_ask_amount = best_prices[right_curr]['bid'][1]
-                post_right_synthetic_order = lambda quantity:binance_client.create_market_sell_order(right_curr, quantity)
-
-        last_order = None
-        if left_order and not right_order:
-            amount = Decimal(left_order['amount'])
-            if left_normal:
-                amount *= Decimal('0.999')
-            last_order = post_right_synthetic_order(amount)
-        elif right_order and not left_order:
-            amount = Decimal(right_order['amount'])
-            if right_normal:
-                amount *= Decimal('0.999')
-            last_order = post_left_synthetic_order(amount)
-
-        if last_order:
-            natural_order = binance_client.create_market_sell_order(natural, Decimal(last_order['amount'])*Decimal('0.999'))
-
-            print(left_order, right_order, natural_order)
-            trade_count += 1
-
-
-    if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < upper_bound:
-        print(natural, synthetic, 'buy natural, sell synthetic',
-              synthetic_bid, natural_ask, diff_perc)
+    # if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < upper_bound:
+    #     print(natural, synthetic, 'buy natural, sell synthetic',
+    #           synthetic_bid, natural_ask, diff_perc)
 
     # pprint(
     #     sorted(order_book['bids'].items(),
@@ -297,20 +261,21 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
 
 
 def get_order_book_snapshot(symbol):
-    global last_update_id
+    # response = requests.get(
+    #     f"https://api.binance.com/api/v3/depth?symbol={symbol}")
+    # data = response.json()
 
-    response = requests.get(
-        f"https://api.binance.com/api/v3/depth?symbol={symbol}")
+    response = get(f"https://api.binance.com/api/v3/depth?symbol={symbol}")
     data = response.json()
 
     try:
         last_update_ids[symbol] = data['lastUpdateId']
-    except Exception as e:
+    except KeyError as e:
         print(data)
-        raise e
+        return
 
-    bids = {Decimal(price): Decimal(size) for price, size in data['bids']}
-    asks = {Decimal(price): Decimal(size) for price, size in data['asks']}
+    bids = {Decimal(price): (Decimal(size), data['lastUpdateId']) for price, size in data['bids']}
+    asks = {Decimal(price): (Decimal(size), data['lastUpdateId']) for price, size in data['asks']}
 
     order_book[symbol] = dict(bids=bids, asks=asks)
 
@@ -324,7 +289,7 @@ def dummy():
 
     i = 0
     for natural, synthetics in triangles.items():
-        print(natural)
+        # print(natural)
         strategies[natural] = synthetics
 
         i += 1
@@ -372,8 +337,8 @@ def dummy():
 
     # await asyncio.gather(*tasks)
 
-    for t in ts:
-        t.join()
+    # for t in ts:
+    #     t.join()
 
 
 if __name__ == '__main__':

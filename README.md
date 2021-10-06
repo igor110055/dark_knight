@@ -13,3 +13,9 @@ A single connection can listen to a maximum of 200 streams.
 (3. add age of order to order book)
 4. estimate probability of making profit (available size and age of order)
 5. post related limit order to chain the reaction (STORM!)
+
+
+Tasks:
+1. check ping lag (milliseconds)
+2. respect lot size
+3. calculate better size
