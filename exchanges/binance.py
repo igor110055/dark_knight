@@ -2,6 +2,7 @@ import asyncio
 import csv
 import hashlib
 import hmac
+import logging
 import os
 from decimal import Decimal
 from functools import lru_cache
@@ -11,9 +12,14 @@ from urllib.parse import urlencode, urljoin
 import aiohttp
 import requests
 import simplejson as json
-from celery import Celery
+from celery import Celery, Task
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
+from redis_client import get_client
+
+logging.basicConfig(level=logging.INFO)
+
+redis = get_client()
 
 load_dotenv()
 
@@ -26,8 +32,8 @@ BASE_URL = 'https://api.binance.com'
 
 logger = get_task_logger(__name__)
 
-app = Celery('binance', broker='redis://localhost:6379/0',
-             backend='redis://localhost:6379/0')
+app = Celery('binance', broker='redis://localhost:6379/1',
+             backend='redis://localhost:6379/2')
 
 session = requests.Session()
 
@@ -131,3 +137,78 @@ def load_symbols():
 
 def get_client():
     return Binance(api_key, secret_key)
+
+
+binance_client = get_client()
+
+
+def update_order_book(order_book, response):
+    end_sequence = response['u']
+    symbol = response['s']
+
+    last_update_id = Decimal(redis.hget('last_update_ids', symbol).decode() or 'Infinity')
+    if Decimal(end_sequence) < last_update_id:
+        return
+
+    start_sequence = response['U']
+
+    epoch = response['E']
+
+    for price, size in response['b']:
+        price = Decimal(price)
+        size = Decimal(size)
+        if size:
+            order_book['bids'][price] = (size, epoch)
+        else:
+            order_book['bids'].pop(price, None)
+
+    for price, size in response['a']:
+        price = Decimal(price)
+        size = Decimal(size)
+        if size:
+            # update event, reconcile with trade data
+            order_book['asks'][price] = (size, epoch)
+        else:
+            # cancel event
+            order_book['asks'].pop(price, None)
+
+
+def apply_cached_response(order_book, symbol):
+    # raw_ob = redis.hget('order_books', symbol)
+    # order_book = json.loads(raw_ob)
+
+    cached_responses = redis.lrange(f"cached_responses:{symbol}", 0, -1)
+    cached_responses = [json.loads(response) for response in cached_responses]
+    for response in cached_responses:
+        update_order_book(order_book, response)
+
+    redis.delete(f"cached_responses:{symbol}")
+
+def cache_order_book(symbol, data):
+    if 'lastUpdateId' not in data:
+        logging.warning(
+            f"['Binance Client'] invalid order book response {data}")
+        return
+
+    redis.hset('last_update_ids', symbol, data['lastUpdateId'])
+
+    now = int(time() * 1000)
+
+    bids = {Decimal(price): (
+        Decimal(size), now) for price, size in data['bids']}
+    asks = {Decimal(price): (
+        Decimal(size), now) for price, size in data['asks']}
+
+    # redis.hset('order_books', symbol, json.dumps({'bids': bids, 'asks': asks}))
+
+    order_book = {'bids': bids, 'asks': asks}
+
+    apply_cached_response(order_book, symbol)
+
+    redis.hset('order_books', symbol, json.dumps(order_book))
+
+
+@app.task()
+def get_order_book_snapshot(symbol):
+    data = binance_client.get_order_book(symbol)
+    cache_order_book(symbol, data)

@@ -8,7 +8,7 @@ from exchanges.binance import get_client
 
 logger = get_task_logger(__name__)
 
-app = Celery('hello', broker='redis://localhost:6379/0', backend='redis://localhost:6379/0')
+app = Celery('hello', broker='redis://localhost:6379/1', backend='redis://localhost:6379/2')
 client = get_client()
 
 
