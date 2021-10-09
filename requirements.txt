@@ -3,4 +3,5 @@ websockets
 networkx
 matplotlib
 ccxt
-dotenv
+python-dotenv
+celery

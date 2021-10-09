@@ -1,18 +1,13 @@
 import asyncio
 import json
-import os
-import pdb
 import threading
 from decimal import Decimal
 
-import requests
 import websockets
-from ccxt import binance
-from dotenv import load_dotenv
 
-from time import time
-
+from exchanges.binance import get_client
 from order_engine import OrderEngine
+from redis_client import get_client as get_redis_client
 from triangle_finder import get_triangles
 
 order_book = dict()
@@ -22,26 +17,26 @@ best_prices = dict()
 strategies = dict()
 symbols = dict()
 
-load_dotenv()
-binance_client = binance({'apiKey': os.getenv('API_KEY'), 'secret': os.getenv('SECRET_KEY')})
 
 fee_factor = Decimal('1') / Decimal('0.999') / Decimal('0.999') * Decimal('1.00001')
 
 trade_count = 0
 
-TRADE_LIMIT = 2
+TRADE_LIMIT = 3
 
 # last_pong = time.time()
 
-engine = OrderEngine(binance_client)
+binance_client = get_client()
 
-trading = False
-lock = threading.RLock()
+engines = {
+    'USDT': OrderEngine(binance_client),
+    # 'BUSD': OrderEngine(binance_client, currency='BUSD'),
+    # 'DAI': OrderEngine(binance_client, currency='DAI')
+}
+# engine = OrderEngine(binance_client)
 
-session = requests.Session()
+redis = get_redis_client()
 
-def get(url):
-    return session.get(url)
 
 async def main(symbols):
     # global last_pong
@@ -99,7 +94,9 @@ def update_order_book(response):
 
     start_sequence = response['U']
 
-    ob = order_book[symbol]
+    ob = order_book.get(symbol)
+    if not ob:
+        return
 
     last_best_bid_price = best_prices[symbol]['bid'][0]
     last_best_ask_price = best_prices[symbol]['ask'][0]
@@ -124,6 +121,8 @@ def update_order_book(response):
             # cancel event
             ob['asks'].pop(price, None)
 
+    # finish
+
     best_bid_price = max(ob['bids'])
     best_bid_size = ob['bids'][best_bid_price]
     best_ask_price = min(ob['asks'])
@@ -142,7 +141,7 @@ def update_order_book(response):
         return
 
     for synthetic in synthetics:
-        check_arbitrage(symbol, synthetic, 0.4)
+        check_arbitrage(symbol, synthetic, 0.3)
 
     # check arbitrage of symbol being a synthetic
     for natural_symbol in symbols[symbol]:
@@ -150,7 +149,7 @@ def update_order_book(response):
         synthetics = strategies[natural_symbol]
         for synthetic in synthetics:
             if symbol in synthetic:
-                check_arbitrage(natural_symbol, synthetic, 0.4)
+                check_arbitrage(natural_symbol, synthetic, 0.35)
 
     # if symbol in symbols:
     #     natural = strategies.get(symbol)
@@ -169,9 +168,10 @@ def update_order_book(response):
     # print(best_prices)
 
 
+redis.set('TRADING', 0)
+
 def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
     global event
-    global trading
     global trade_count
 
     (left_curr, (left_normal, left_assets)), (right_curr, (right_normal, right_assets)) = synthetic.items()
@@ -237,15 +237,31 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
 
     # TODO: add available size
 
+    # natural_bid = Decimal('0.9991')
+    # synthetic_ask = Decimal('1.833e-0.5') * Decimal('54555')
+
+    if redis.get('TRADING'):
+        return
+
     if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < upper_bound:
         # print(natural, synthetic, 'buy synthetic, sell natural', natural_bid, synthetic_ask, diff_perc)
 
-        if not trading:
-            print('thread:', threading.get_native_id(), time(), natural, synthetic)
-            trading = True
-            if engine.buy_synthetic_sell_natural(natural, synthetic, best_prices):
+        # print('thread:', threading.get_native_id(), time(), natural, synthetic)
+
+        if natural[-4:] == 'USDT':
+            redis.set('TRADING', 1, 1)
+            if engines['USDT'].buy_synthetic_sell_natural(natural, synthetic, best_prices, target_perc):
                 trade_count += 1
-            trading = False
+            redis.set('TRADING', 0)
+        # elif natural[-4:] == 'BUSD':
+        #     if engines['BUSD'].buy_synthetic_sell_natural(natural, synthetic, best_prices):
+        #         trade_count += 1
+        #         sleep(3)
+        # elif natural[-3:] == 'DAI':
+        #     if engines['DAI'].buy_synthetic_sell_natural(natural, synthetic, best_prices):
+        #         trade_count += 1
+        #         sleep(3)
+
 
     # if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < upper_bound:
     #     print(natural, synthetic, 'buy natural, sell synthetic',
@@ -261,12 +277,7 @@ def check_arbitrage(natural, synthetic, target_perc=0.4, upper_bound=0.8, usdt_a
 
 
 def get_order_book_snapshot(symbol):
-    # response = requests.get(
-    #     f"https://api.binance.com/api/v3/depth?symbol={symbol}")
-    # data = response.json()
-
-    response = get(f"https://api.binance.com/api/v3/depth?symbol={symbol}")
-    data = response.json()
+    data = binance_client.get_order_book(symbol)
 
     try:
         last_update_ids[symbol] = data['lastUpdateId']
