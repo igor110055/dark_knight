@@ -5,3 +5,8 @@ matplotlib
 ccxt
 python-dotenv
 celery
+simplejson
+redis
+websocket-client
+
+# TODO: separate dev, testing, prod envs
