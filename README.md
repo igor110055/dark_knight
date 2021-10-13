@@ -15,7 +15,31 @@ A single connection can listen to a maximum of 200 streams.
 5. post related limit order to chain the reaction (STORM!)
 
 
+Architecture:
+
+- Asyncio for WebSocket streams
+  - receive order book update
+
+- Threading for WebSockets (easier to share memory)
+
+- Celery for order execution (multiprocessing)
+  - update order book redis
+  - create order
+  - calculate PnL
+
+
+
+
 Tasks:
 1. check ping lag (milliseconds)
 2. respect lot size
 3. calculate better size
+
+
+Pending:
+1. make singleton binance client
+2. check redis failed trade
+
+3. gradually load order book, one by one
+4. TTL on everything in redis to ensure no obsolete data, re populate if needed
+5. clear redis cache on initialisation

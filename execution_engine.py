@@ -5,6 +5,9 @@ from celery import Celery
 from celery.utils.log import get_task_logger
 
 from exchanges.binance import get_client
+from tasks.redis_task import on_message
+from tasks.order_book_task import update_order_book, get_order_book_snapshot
+
 
 logger = get_task_logger(__name__)
 

@@ -18,7 +18,7 @@ cached_responses = {}
 @app.task
 def update_order_book(response: dict):
     symbol = response['s']
-    epoch = response['E']
+    epoch = response['E']  # TODO: add to price
     start_sequence = response['U']
     end_sequence = response['u']
 
@@ -28,27 +28,26 @@ def update_order_book(response: dict):
         return get_order_book_snapshot.delay(symbol)
 
     if symbol in last_sequences:
-        assert start_sequence == last_sequences[symbol] + 1
-
-    order_book = OrderBook.get(symbol)
-
+        if start_sequence != last_sequences[symbol] + 1:
+            del last_update_ids[symbol]
     last_sequences[symbol] = end_sequence
-    for price, amount in response['b']:
+
+    # TODO: may need to synchronize
+    flush_changes.delay(symbol, 'bids', response['b'])
+    flush_changes.delay(symbol, 'asks', response['a'])
+
+
+@app.task
+def flush_changes(symbol, side, changes):
+    order_book = OrderBook.get(symbol)
+    for price, amount in changes:
         if float(amount):
-            order_book.set('bids', price, amount)
+            order_book.set(side, price, amount)
         else:
-            order_book.delete('bids', price)
-
-    for price, amount in response['a']:
-        if float(amount):
-            # update event, reconcile with trade data
-            order_book.set('asks', price, amount)
-        else:
-            # cancel event
-            order_book.delete('asks', price)
+            order_book.delete(side, price)
 
 
-@app.task()
+@app.task
 def get_order_book_snapshot(symbol):
     data = binance_client.get_order_book(symbol)
     last_update_id = data.pop('lastUpdateId', None)
@@ -63,13 +62,10 @@ def get_order_book_snapshot(symbol):
     # bids = {float(price): [size, now] for price, size in data['bids']}
     # asks = {float(price): [size, now] for price, size in data['asks']}
 
-    # bs = {size: float(price) for price, size in data['bids']}
-
-    order_book = OrderBook.get(symbol)
-    apply_cached_response(order_book, symbol)
+    apply_cached_response(symbol)
 
 
-def apply_cached_response(order_book, symbol):
+def apply_cached_response(symbol):
     cache_applied = False
     for response in cached_responses[symbol]:
         symbol = response['s']
@@ -85,14 +81,7 @@ def apply_cached_response(order_book, symbol):
         cache_applied = True
 
     if cache_applied:
-        cached_responses[symbol] = []
-    # if cache_applied:
-    #     # bids = {Decimal(price): size for price, size in order_book['bids'].items()}
-    #     # asks = {Decimal(price): size for price, size in order_book['asks'].items()}
-    #     # order_book['bids'] = sorted(bids, reverse=True)[5:]
-    #     # order_book['asks'] = sorted(asks)[5:]
-    #     redis.hset('last_update_ids', symbol, last_update_id)
-    #     redis.delete(f"cached_responses:{symbol}")
+        del cached_responses[symbol]
 
 
 def has_order_book_initialized(response):
