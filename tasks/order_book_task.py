@@ -29,22 +29,37 @@ def update_order_book(response: dict):
 
     if symbol in last_sequences:
         if start_sequence != last_sequences[symbol] + 1:
-            del last_update_ids[symbol]
+            last_update_ids[symbol] = None
     last_sequences[symbol] = end_sequence
 
-    # TODO: may need to synchronize
-    flush_changes.delay(symbol, 'bids', response['b'])
-    flush_changes.delay(symbol, 'asks', response['a'])
+    order_book_ob = OrderBook.get(symbol)
+    order_book = order_book_ob.get_book()
 
-
-@app.task
-def flush_changes(symbol, side, changes):
-    order_book = OrderBook.get(symbol)
-    for price, amount in changes:
+    for price, amount in response['b']:
+        price = float(price)
         if float(amount):
-            order_book.set(side, price, amount)
+            order_book['bids'][price] = amount
         else:
-            order_book.delete(side, price)
+            order_book['bids'].pop(price, None)
+
+    for price, amount in response['a']:
+        price = float(price)
+        if float(amount):
+            order_book['asks'][price] = amount
+        else:
+            order_book['asks'].pop(price, None)
+
+    order_book_ob.save()
+
+    if order_book['bids'] and order_book['asks']:
+        best_bid = max(order_book['bids'])
+        best_ask = min(order_book['asks'])
+
+        if best_bid > best_ask:
+            last_update_ids[symbol] = None
+            get_order_book_snapshot.delay(symbol)
+
+        order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
 
 @app.task
@@ -67,7 +82,7 @@ def get_order_book_snapshot(symbol):
 
 def apply_cached_response(symbol):
     cache_applied = False
-    for response in cached_responses[symbol]:
+    for response in cached_responses.get(symbol, []):
         symbol = response['s']
 
         if not has_order_book_initialized(response):
@@ -81,15 +96,17 @@ def apply_cached_response(symbol):
         cache_applied = True
 
     if cache_applied:
-        del cached_responses[symbol]
+        cached_responses[symbol] = []
 
 
 def has_order_book_initialized(response):
     symbol = response['s']
     end_sequence = response['u']
-    last_update_id = Decimal(last_update_ids.get(symbol, 'Infinity'))
 
-    return Decimal(end_sequence) > last_update_id
+    if not (last_update_id := last_update_ids.get(symbol, None)):
+        return False
+
+    return end_sequence > last_update_id
 
 
 def is_subsequent_response(response):

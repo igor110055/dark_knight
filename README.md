@@ -43,3 +43,9 @@ Pending:
 3. gradually load order book, one by one
 4. TTL on everything in redis to ensure no obsolete data, re populate if needed
 5. clear redis cache on initialisation
+
+
+use threads as pool, because this somehow ensure sequence of updates
+```
+celery -A execution_engine worker --loglevel=INFO --pool=threads
+```
