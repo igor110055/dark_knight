@@ -1,14 +1,7 @@
-import pdb
-from decimal import Decimal
-from time import time
-
-from exchanges.binance import get_client, _get_order_book
+from exchanges.binance import Binance
 from models.order_book import OrderBook
 
-from tasks.client import app
-
-binance_client = get_client()
-
+from celery_app import app
 
 last_update_ids = {}
 last_sequences = {}
@@ -68,8 +61,7 @@ def update_order_book(response: dict):
 @app.task
 def get_order_book_snapshot(symbol):
     print('Get order book for:', symbol)
-    data = _get_order_book(symbol)
-    # data = binance_client.get_order_book(symbol)
+    data = Binance.get_order_book(symbol, 9999)
     last_update_id = data.pop('lastUpdateId', None)
 
     if last_update_id is None:
