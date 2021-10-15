@@ -2,7 +2,7 @@ import pdb
 from decimal import Decimal
 from time import time
 
-from exchanges.binance import get_client
+from exchanges.binance import get_client, _get_order_book
 from models.order_book import OrderBook
 
 from tasks.client import app
@@ -57,14 +57,19 @@ def update_order_book(response: dict):
 
         if best_bid > best_ask:
             last_update_ids[symbol] = None
+            order_book_ob.best_prices = {'bids': 0, 'asks': 0}
+            order_book_ob.clear()
             get_order_book_snapshot.delay(symbol)
 
-        order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
+        else:
+            order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
 
 @app.task
 def get_order_book_snapshot(symbol):
-    data = binance_client.get_order_book(symbol)
+    print('Get order book for:', symbol)
+    data = _get_order_book(symbol)
+    # data = binance_client.get_order_book(symbol)
     last_update_id = data.pop('lastUpdateId', None)
 
     if last_update_id is None:
@@ -113,5 +118,8 @@ def is_subsequent_response(response):
     symbol = response['s']
     start_sequence = response['U']
     end_sequence = response['u']
+
+    if symbol not in last_sequences:
+        return False
 
     return start_sequence <= last_sequences[symbol] + 1 <= end_sequence

@@ -8,5 +8,9 @@ celery
 simplejson
 redis
 websocket-client
+urllib3
+
+# dev
+pytest
 
 # TODO: separate dev, testing, prod envs

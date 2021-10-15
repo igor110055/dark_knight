@@ -4,19 +4,20 @@ import hashlib
 import hmac
 import logging
 import os
+import random
 from decimal import Decimal
 from functools import lru_cache
 from time import time
 from urllib.parse import urlencode, urljoin
 
-import aiohttp
 import requests
+import requests.adapters
 import simplejson as json
-from celery import Celery, Task
+import websockets
+from celery import Celery
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
 from redis_client import get_client
-from models.order_book import OrderBook
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,6 +38,9 @@ app = Celery('binance', broker='redis://localhost:6379/1',
              backend='redis://localhost:6379/2')
 
 session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=500, pool_maxsize=500)
+session.mount(BASE_URL, adapter)
+
 
 # loop = asyncio.get_event_loop()
 
@@ -114,7 +118,11 @@ class Binance:
     def get(path, params=None, raw=False):
         if raw:
             url = urljoin(BASE_URL, path)
-            return session.get(url, params=params).json()
+            response = session.get(url, params=params)
+            if response.status_code == 200:
+                return json.loads(session.get(url, params=params).content)
+            else:
+                return None
         return _request('GET', path, params)
 
     @staticmethod
@@ -129,6 +137,7 @@ class Binance:
         for filter in eval(symbol['filters']):
             if filter['filterType'] == 'LOT_SIZE':
                 return filter['minQty']
+
 
 
 def load_symbols():
@@ -251,15 +260,42 @@ def cache_order_book(symbol, data):
 
     apply_cached_response(order_book, symbol)
 
-    # TODO: try sorted set
-    redis.hset('order_books', symbol, json.dumps(order_book))
-    order_booksss.populate(dict(data['bids']), dict(data['asks']))
-    # redis.zadd(symbol+'bid', bs)
 
-order_booksss = OrderBook('ETHUSDT')
+import websocket
 
+
+def _get_order_book(symbol, id=random.randint(1, 100)):
+    ws = websocket.WebSocket(enable_multithread=True)
+
+    ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
+
+    payload = {
+        "method": "SUBSCRIBE",
+        'params': [f'{symbol.lower()}@depth20@100ms'],
+        "id": id
+    }
+
+    ws.send(json.dumps(payload))
+
+    ws.recv()
+
+    message = ws.recv()
+    ws.close()
+
+    return json.loads(message)
+
+
+import concurrent.futures
+
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
+
+
+def get_order_book(symbol, id):
+    future = executor.submit(_get_order_book, symbol, id)
+    return_value = future.result()
+    return return_value
 
 @app.task()
 def get_order_book_snapshot(symbol):
-    data = binance_client.get_order_book(symbol)
+    data = get_order_book(symbol, 9999)
     cache_order_book(symbol, data)
