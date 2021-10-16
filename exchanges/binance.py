@@ -94,11 +94,20 @@ class Binance:
             "id": id
         }
 
-        ws.send(json.dumps(payload))
+        data = json.dumps(payload)
+        try:
+            ws.send(data)
+        except:
+            return {}
+            # ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
+            # ws.send(data)
 
         ws.recv()
 
         message = ws.recv()
+
+        # ws.send(data.replace('SUBSCRIBE', 'UNSUBSCRIBE'))    
+
         ws.close()
 
         return json.loads(message)

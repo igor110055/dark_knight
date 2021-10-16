@@ -1,5 +1,3 @@
-import pytest
-
 from exchanges.binance import Binance
 
 
