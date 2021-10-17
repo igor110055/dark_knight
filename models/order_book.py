@@ -11,7 +11,9 @@ class OrderBook:
     def __init__(self, symbol) -> None:
         self.symbol = symbol
         self.bids_key = f"{self.symbol}:bids"
+        self.bids_prices = []
         self.asks_key = f"{self.symbol}:asks"
+        self.asks_prices = []
         self.redis = get_client()
         self.book = None
 
@@ -22,11 +24,11 @@ class OrderBook:
 
         if bids:
             self.redis.hmset(f"{self.bids_key}", bids)
-            self.redis.sadd(f"{self.bids_key}:prices", *bids)
+            self.bids_prices = bids.keys()  # float
 
         if asks:
             self.redis.hmset(f"{self.asks_key}", asks)
-            self.redis.sadd(f"{self.asks_key}:prices", *asks)
+            self.asks_prices = asks.keys()  # float
 
     # def delete(self, side, price):
     #     self.redis.srem(f"{self.symbol}:{side}:prices", price)
@@ -39,41 +41,47 @@ class OrderBook:
     def clear(self, deep=True):
         if deep:
             self.redis.delete(self.bids_key, self.asks_key)
-        self.redis.delete(f"{self.bids_key}:prices",
-                          f"{self.asks_key}:prices", f"best_prices:{self.symbol}:*")
+        self.redis.delete(f"best_prices:{self.symbol}:*")
 
-    def save(self):
-        self.populate(self.book['bids'], self.book['asks'])
+    def save(self, book):
+        self.populate(book['bids'], book['asks'])
 
-    def get_best(self, top=-1):
+    def get_best(self, top=None):
         return {'bids': self.get_best_bids(top), 'asks': self.get_best_asks(top)}
 
-    def get_best_bids(self, top=-1):
-        bids_prices = self.redis.sort(
-            f"{self.bids_key}:prices", 0, top, desc=True)
-        if not bids_prices:
+    def get_best_bids(self, top=None):
+        if not self.bids_prices:
             return []
+
+        bids_prices = sorted(self.bids_prices, reverse=True)
+
+        if top is not None:
+            bids_prices = bids_prices[:top]
 
         bids = list(zip(bids_prices, self.redis.hmget(
             self.bids_key, bids_prices)))
         return bids
 
-    def get_best_asks(self, top=-1):
-        asks_prices = self.redis.sort(f"{self.asks_key}:prices", 0, top)
-        if not asks_prices:
+    def get_best_asks(self, top=None):
+        if not self.asks_prices:
             return []
+
+        asks_prices = sorted(self.asks_prices)
+
+        if top is not None:
+            asks_prices = asks_prices[:top]
 
         asks = list(zip(asks_prices, self.redis.hmget(
             self.asks_key, asks_prices)))
         return asks
 
     def get_book(self):
-        self.book = {
+        return {
             'bids': {float(price): amount for price, amount in self.get_best_bids()},
             'asks': {float(price): amount for price, amount in self.get_best_asks()}
         }
-        return self.book
 
+    # Important: for arbitrage
     @property
     def best_prices(self):
         bids = self.redis.hget(f"best_orders:{self.symbol}", "bids")

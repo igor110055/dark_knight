@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import os
 from functools import lru_cache
+from queue import Queue
 from time import time
 from urllib.parse import urlencode, urljoin
 
@@ -41,6 +42,16 @@ def _request(method, path, params):
     url = urljoin(BASE_URL, path)
     response = session.request(method, url, headers=headers, params=params)
     return response.json()
+
+
+WEBSOCKETS = Queue()
+
+WS_NUM = 200
+
+for _ in range(WS_NUM):
+    ws = websocket.WebSocket(enable_multithread=True)  # False => no lock!
+    ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
+    WEBSOCKETS.put(ws) # TODO: nowait?
 
 
 class Binance:
@@ -84,10 +95,6 @@ class Binance:
 
     @staticmethod
     def get_order_book(symbol, id=99999):
-        ws = websocket.WebSocket(enable_multithread=False)
-
-        ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
-
         payload = {
             "method": "SUBSCRIBE",
             'params': [f'{symbol.lower()}@depth20@100ms'],
@@ -96,20 +103,20 @@ class Binance:
 
         data = json.dumps(payload)
         try:
+            ws = WEBSOCKETS.get_nowait()
             ws.send(data)
         except:
-            return {}
-            # ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
-            # ws.send(data)
+            ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
+            ws.send(data)
 
         ws.recv()
 
         message = ws.recv()
 
-        # ws.send(data.replace('SUBSCRIBE', 'UNSUBSCRIBE'))    
+        ws.send(data.replace('SUBSCRIBE', 'UNSUBSCRIBE'))
 
-        ws.close()
-
+        # ws.close()
+        WEBSOCKETS.put_nowait(ws)
         return json.loads(message)
         # return self.get(f"api/v3/depth?symbol={symbol}", raw=True)
 
