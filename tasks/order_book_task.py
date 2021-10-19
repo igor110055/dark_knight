@@ -1,12 +1,10 @@
+from celery_app import app
 from exchanges.binance import Binance
 from models.order_book import OrderBook
-
-from celery_app import app
 
 last_update_ids = {}
 last_sequences = {}
 cached_responses = {}
-
 
 @app.task
 def update_order_book(response: dict):
@@ -42,7 +40,7 @@ def update_order_book(response: dict):
         else:
             order_book['asks'].pop(price, None)
 
-    order_book_ob.save()
+    order_book_ob.save(order_book)
 
     if order_book['bids'] and order_book['asks']:
         best_bid = max(order_book['bids'])
@@ -79,8 +77,11 @@ def get_order_book_snapshot(symbol):
 
 def apply_cached_response(symbol):
     cache_applied = False
+
+    order_book_ob = OrderBook.get(symbol)
+    order_book_ob.clear()
     for response in cached_responses.get(symbol, []):
-        symbol = response['s']
+        # symbol = response['s']
 
         if not has_order_book_initialized(response):
             continue

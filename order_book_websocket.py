@@ -30,8 +30,7 @@ async def connect(url, symbols, timeout=60*15):
         # ack
         await websocket.recv()
 
-        while True:
-            message = await websocket.recv()
+        async for message in websocket:
             response = json.loads(message)
             update_order_book.delay(response)
             symbol = response['s']
