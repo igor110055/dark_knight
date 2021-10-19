@@ -2,7 +2,7 @@
 broker_url = 'redis://localhost:6379/1'
 
 # List of modules to import when the Celery worker starts.
-imports = ('tasks.order_book_task',)
+imports = ('tasks.order_book_task', 'tasks.websocket_task')
 
 ## Using the database to store task state and results.
 result_backend = 'redis://localhost:6379/2'
@@ -17,6 +17,8 @@ result_backend = 'redis://localhost:6379/2'
 beat_schedule = {
     'ping-websocket-server-every-30-seconds': {
         'task': 'tasks.websocket_task.ping_server',
-        'schedule': 30.0
+        'schedule': 1.0
     }
 }
+
+timezone = 'UTC'
