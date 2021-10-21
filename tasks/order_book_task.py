@@ -48,9 +48,11 @@ def update_order_book(response: dict):
 
         if best_bid > best_ask:
             last_update_ids[symbol] = None
-            order_book_ob.best_prices = {'bids': 0, 'asks': 0}
-            order_book_ob.clear()
-            get_order_book_snapshot.delay(symbol)
+            # order_book_ob.best_prices = {'bids': 0, 'asks': 0}
+            # order_book_ob.clear()
+            cached_responses.setdefault(symbol, []).append(response)
+            last_update_ids[symbol] = None
+            # get_order_book_snapshot.delay(symbol)
 
         else:
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
