@@ -1,19 +1,7 @@
-import csv
 import pickle
 
 import networkx as nx
-
-
-def load_symbols(file_path='symbols.csv'):
-    with open(file_path) as csv_file:
-        reader = csv.DictReader(csv_file)
-        symbols = {}
-        for row in reader:
-            if row['status'] == 'TRADING':
-                symbols[row['symbol']] = [row['baseAsset'], row['quoteAsset']]
-
-        return symbols
-
+from services.symbol_service import SymbolService
 
 def dump_triangulars(file_path='triangulars.pickle'):
     triangulars = get_triangulars()
@@ -22,12 +10,21 @@ def dump_triangulars(file_path='triangulars.pickle'):
 
 
 def load_triangulars(file_path='triangulars.pickle'):
+    # {'ATOMBUSD': [{'ATOMBNB': {'normal': True, 'base': 'ATOM', 'quote': 'BNB'},
+    #                'BNBBUSD': {'normal': True, 'base': 'BNB', 'quote': 'BUSD'}},
+    #               {'ATOMBTC': {'normal': True, 'base': 'ATOM', 'quote': 'BTC'},
+    #                'BTCBUSD': {'normal': True, 'base': 'BTC', 'quote': 'BUSD'}},
+    #               {'ATOMUSDT': {'normal': True, 'base': 'ATOM', 'quote': 'USDT'},
+    #                'BUSDUSDT': {'normal': False, 'base': 'BUSD', 'quote': 'USDT'}},
+    #               {'ATOMUSDC': {'normal': True, 'base': 'ATOM', 'quote': 'USDC'},
+    #                'USDCBUSD': {'normal': True, 'base': 'USDC', 'quote': 'BUSD'}}]}
+
     with open(file_path, 'rb') as file:
         return pickle.load(file)
 
 
 def get_triangulars():
-    symbols = load_symbols()
+    symbols = SymbolService.load_symbols()
 
     G = nx.Graph()
     for symbol, [base_asset, quote_asset] in symbols.items():
@@ -52,7 +49,8 @@ def get_triangulars():
                 continue
 
             if len(path) == 3:
-                synthetic = get_synthetic(G, natural_base_currency, natural_quote_currency, path)
+                synthetic = get_synthetic(
+                    G, natural_base_currency, natural_quote_currency, path)
                 synthetics.append(synthetic)
 
         triangular_assets[natural_symbol] = synthetics

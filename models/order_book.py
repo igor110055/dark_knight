@@ -84,9 +84,9 @@ class OrderBook:
     # Important: for arbitrage
     @property
     def best_prices(self):
-        bids = self.redis.hget(f"best_orders:{self.symbol}", "bids")
-        asks = self.redis.hget(f"best_orders:{self.symbol}", "asks")
-        return dict(bids=bids, asks=asks)
+        bids = self.redis.hget(f"best_orders:{self.symbol}", "bids") or 0
+        asks = self.redis.hget(f"best_orders:{self.symbol}", "asks") or 0
+        return dict(bids=float(bids), asks=float(asks))
 
     @best_prices.setter
     def best_prices(self, best_prices):
