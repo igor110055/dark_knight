@@ -1,6 +1,6 @@
 ## Broker settings.
-broker_url = 'amqp://guest:guest@localhost:5672//'
-# broker_url = 'redis://localhost:6379/1'
+# broker_url = 'amqp://guest:guest@localhost:5672//'
+broker_url = 'redis://localhost:6379/1'
 
 # List of modules to import when the Celery worker starts.
 imports = ('tasks.order_book_task', 'tasks.websocket_task', 'tasks.order_task')

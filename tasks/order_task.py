@@ -64,8 +64,7 @@ def calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, ri
     return left_synthetic_ask * right_synthetic_ask
 
 
-@app.task
-def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
+async def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
     order_book = OrderBook.get(natural_symbol)

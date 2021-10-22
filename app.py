@@ -2,9 +2,6 @@ import asyncio
 import simplejson as json
 import threading
 from decimal import Decimal
-from datetime import datetime
-
-import websockets
 
 from exchanges.binance import get_client
 from order_engine import OrderEngine
@@ -45,9 +42,13 @@ def trading(symbol):
     if not synthetics:
         return
 
+    loop = asyncio.get_event_loop()
+
+    tasks = []
+
     for synthetic in synthetics:
         # TODO: concurrent
-        check_arbitrage.delay(symbol, synthetic, 0.3)
+        tasks.append(loop.create_task(check_arbitrage(symbol, synthetic, 0.3)))
 
     # check arbitrage of symbol being a synthetic
     for natural_symbol in symbols[symbol]:
@@ -55,7 +56,9 @@ def trading(symbol):
         synthetics = strategies[natural_symbol]
         for synthetic in synthetics:
             if symbol in synthetic:
-                check_arbitrage.delay(natural_symbol, synthetic, 0.35)
+                tasks.append(loop.create_task(check_arbitrage(natural_symbol, synthetic, 0.35)))
+
+    asyncio.gather(*tasks)
 
     # if symbol in symbols:
     #     natural = strategies.get(symbol)

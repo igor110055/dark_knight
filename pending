@@ -7,3 +7,5 @@
 
 6. websocket pooling ws4py
 7. separate get order book & update order book into 2 queues
+
+8. manually select arbitrage pairs
