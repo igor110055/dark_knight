@@ -1,12 +1,17 @@
 import asyncio
+import multiprocessing
 
 import simplejson as json
 import websockets
+
+from multiprocessing import Manager, Process
 
 from models.order_book import OrderBook
 from tasks.order_book_task import update_order_book
 
 WS_URL = "wss://stream.binance.com:9443/ws"
+manager = Manager()
+responses = manager.Queue()
 
 
 async def connect(url, symbols, callback, timeout=60*15):
@@ -32,17 +37,29 @@ async def connect(url, symbols, callback, timeout=60*15):
 
         async for message in websocket:
             response = json.loads(message)
-            update_order_book.delay(response)
-            symbol = response['s']
-            callback(symbol)
+            responses.put(response)
+            # update_order_book.delay(response)
+            # symbol = response['s']
+            # callback(symbol)
 
             # print(symbol, order_books[symbol].best_prices)
             # print(symbol, order_books[symbol].get_best(1))
 
 order_books = {}
 
-async def run(symbols, callback):
+def run(symbols, callback):
     # tasks = []
     # tasks.append(asyncio.create_task(connect(WS_URL, symbols, callback)))
     # await asyncio.gather(*tasks)
-    await connect(WS_URL, symbols, callback)
+    asyncio.run(connect(WS_URL, symbols, callback))
+
+def handle_response():
+    while True:
+        response = responses.get()
+        if response:
+            # pool.apply_async(update_order_book, args=[response])
+            update_order_book.delay(response)
+        # print(responses.qsize())
+
+
+Process(target=handle_response).start()

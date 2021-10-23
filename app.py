@@ -87,22 +87,37 @@ async def main():
 
     # for symbol in list(symbols.items())[::200]:
 
-    steps = 200
+    steps = 10
     ts = []
     count = 0
     for i in range(0, len(symbols), steps):
         s = list(symbols.items())[i:i+steps]
         _symbols = dict(s)
+        __symbols = []
+        for symbol in _symbols:
+            if len(__symbols) > 50:
+                __symbols = __symbols[:50]
+                break
+            pending = list(_symbols[symbol])
+
+            __symbols.extend(pending)
+
+            __symbols.append(symbol)
+
+        # import pdb
+        # pdb.set_trace()
+
+        print(__symbols)
+
         # print(list(_symbols.keys()))
-        ts.append(asyncio.create_task(run(_symbols, lambda _: None)))
-        # t = threading.Thread(target=asyncio.run, args=(run(_symbols, trading), ))
-        # t.start()
-        # count += 1
-        # if count == 1:
-        #     break
+        t = threading.Thread(target=run, args=(__symbols, lambda _: None))
+        t.start()
+        count += 1
+        if count == 1:
+            break
         # ts.append(t)
 
-    await asyncio.gather(*ts)
+    # await asyncio.gather(*ts)
 
     # for t in ts:
     #     t.join()

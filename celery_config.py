@@ -1,12 +1,12 @@
 ## Broker settings.
 # broker_url = 'amqp://guest:guest@localhost:5672//'
-broker_url = 'redis://localhost:6379/1'
+broker_url = 'redis://localhost:6379/3'
 
 # List of modules to import when the Celery worker starts.
 imports = ('tasks.order_book_task', 'tasks.websocket_task', 'tasks.order_task')
-
+worker_prefetch_multiplier = 32
 ## Using the database to store task state and results.
-result_backend = 'redis://localhost:6379/2'
+# result_backend = 'redis://localhost:6379/2'
 
 # task_annotations = {'tasks.add': {'rate_limit': '10/s'}}
 
@@ -15,11 +15,11 @@ result_backend = 'redis://localhost:6379/2'
 #     'tasks.order_book_task.get_order_book_snapshot': 'additional'
 # }
 
-beat_schedule = {
-    'ping-websocket-server-every-30-seconds': {
-        'task': 'tasks.websocket_task.ping_server',
-        'schedule': 1.0
-    }
-}
+# beat_schedule = {
+#     'ping-websocket-server-every-30-seconds': {
+#         'task': 'tasks.websocket_task.ping_server',
+#         'schedule': 1.0
+#     }
+# }
 
 timezone = 'UTC'
