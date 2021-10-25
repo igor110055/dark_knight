@@ -64,7 +64,7 @@ def calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, ri
     return left_synthetic_ask * right_synthetic_ask
 
 
-async def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
+def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
     order_book = OrderBook.get(natural_symbol)
@@ -90,6 +90,7 @@ async def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_boun
     synthetic_ask = calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets)
     synthetic_bid = calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, right_assets)
     
+    # print(synthetic_bid, synthetic_ask)
     if not synthetic_bid or not synthetic_ask:
         return
 
@@ -102,11 +103,13 @@ async def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_boun
     # if redis.get('TRADING') == 'true':
     #     return
 
-    if (diff_perc := (natural_bid - synthetic_ask) / synthetic_ask * 100) > target_perc and diff_perc < upper_bound:
-        logger.info(f"{natural_symbol}, {synthetic}: 'buy synthetic, sell natural', {natural_bid}, {synthetic_ask}, {diff_perc}")
+    diff_perc = (natural_bid - synthetic_ask) / synthetic_ask * 100
+    if diff_perc > target_perc:
+        print(datetime.now(), diff_perc)
+        print(f"{natural_symbol}, {synthetic}: 'buy synthetic, sell natural', {natural_bid}, {synthetic_ask}, {diff_perc}")
 
-        if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
-            print('found')
+        # if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
+        #     print('found')
             # redis.set('TRADING', 'true', 1)
             # if engines['USDT'].buy_synthetic_sell_natural(natural_symbol, synthetic, target_perc):
             #     trade_count += 1

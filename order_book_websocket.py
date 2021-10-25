@@ -8,6 +8,7 @@ from multiprocessing import Manager, Process
 
 from models.order_book import OrderBook
 from tasks.order_book_task import update_order_book
+from tasks.order_task import check_arbitrage
 
 WS_URL = "wss://stream.binance.com:9443/ws"
 manager = Manager()
@@ -53,13 +54,26 @@ def run(symbols, callback):
     # await asyncio.gather(*tasks)
     asyncio.run(connect(WS_URL, symbols, callback))
 
+
+def trading(symbol):
+    if symbol in ['LUNAUSDT', 'LUNABUSD', 'BUSDUSDT']:
+        symbol = 'LUNAUSDT'
+        synthetic = {
+            'LUNABUSD': {'normal': True},
+            'BUSDUSDT': {'normal': True}
+        }
+        check_arbitrage(symbol, synthetic, 0.3)
+
 def handle_response():
     while True:
         response = responses.get()
         if response:
             # pool.apply_async(update_order_book, args=[response])
             update_order_book.delay(response)
+            symbol = response['s']
+            trading(symbol)
         # print(responses.qsize())
 
 
 Process(target=handle_response).start()
+
