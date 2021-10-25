@@ -56,11 +56,11 @@ def run(symbols, callback):
 
 
 def trading(symbol):
-    if symbol in ['LUNAUSDT', 'LUNABUSD', 'BUSDUSDT']:
+    if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
         symbol = 'LUNAUSDT'
         synthetic = {
-            'LUNABUSD': {'normal': True},
-            'BUSDUSDT': {'normal': True}
+            'LUNABNB': {'normal': True},
+            'BNBUSDT': {'normal': True}
         }
         check_arbitrage(symbol, synthetic, 0.3)
 

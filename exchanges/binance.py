@@ -46,12 +46,13 @@ def _request(method, path, params):
 
 WEBSOCKETS = Queue()
 
-WS_NUM = 200
+if os.getenv('WS_POOL'):
+    WS_NUM = 20
 
-for _ in range(WS_NUM):
-    ws = websocket.WebSocket(enable_multithread=True)  # False => no lock!
-    ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
-    WEBSOCKETS.put(ws) # TODO: nowait?
+    for _ in range(WS_NUM):
+        ws = websocket.WebSocket(enable_multithread=True)  # False => no lock!
+        ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
+        WEBSOCKETS.put(ws) # TODO: nowait?
 
 
 class Binance:
