@@ -1,3 +1,5 @@
+import asyncio
+from asyncio import tasks
 import csv
 import hashlib
 import hmac
@@ -7,10 +9,12 @@ from queue import Queue
 from time import time
 from urllib.parse import urlencode, urljoin
 
+from multiprocessing import Manager, Process
+
 import requests
 import requests.adapters
 import simplejson as json
-import websocket
+import websockets
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +30,10 @@ session.mount(BASE_URL, adapter)
 
 headers = {'X-MBX-APIKEY': api_key}
 message_hash_key = secret_key.encode('utf-8')
+
+manager = Manager()
+payloads = manager.Queue()
+responses = manager.dict()
 
 
 def _request(method, path, params):
@@ -43,17 +51,8 @@ def _request(method, path, params):
     response = session.request(method, url, headers=headers, params=params)
     return response.json()
 
-
-WEBSOCKETS = Queue()
-
 if os.getenv('WS_POOL'):
-    WS_NUM = 20
-
-    for _ in range(WS_NUM):
-        ws = websocket.WebSocket(enable_multithread=True)  # False => no lock!
-        ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
-        WEBSOCKETS.put(ws) # TODO: nowait?
-
+    pass
 
 class Binance:
     SYMBOLS = None
@@ -102,22 +101,16 @@ class Binance:
             "id": id
         }
 
-        data = json.dumps(payload)
-        try:
-            ws = WEBSOCKETS.get_nowait()
-            ws.send(data)
-        except:
-            ws.connect("wss://stream.binance.com:9443/ws", timeout=60*15)
-            ws.send(data)
+        payloads.put_nowait(payload)
 
-        ws.recv()
+        while True:
+            message = responses.pop(id, None)
+            if message:
+                break
 
-        message = ws.recv()
+        payload['method'] = 'UNSUBSCRIBE'
+        payloads.put(payload)
 
-        ws.send(data.replace('SUBSCRIBE', 'UNSUBSCRIBE'))
-
-        # ws.close()
-        WEBSOCKETS.put_nowait(ws)
         return json.loads(message)
         # return self.get(f"api/v3/depth?symbol={symbol}", raw=True)
 
@@ -160,3 +153,47 @@ def load_symbols():
 
 def get_client():
     return Binance(api_key, secret_key)
+
+
+async def websocket_pool(num=5):
+    tasks = []
+    for _ in range(num):
+        tasks.append(asyncio.create_task(connect("wss://stream.binance.com:9443/ws")))
+
+    await asyncio.gather(*tasks)
+
+
+async def connect(url, timeout=60*15):
+    async with websockets.connect(url, ping_timeout=timeout) as websocket:
+        while True:
+            if payloads.empty():
+                await asyncio.sleep(0)
+                continue
+
+            payload = payloads.get_nowait()
+            if not payload:
+                await asyncio.sleep(0)
+                continue
+            await websocket.send(json.dumps(payload))
+
+            # ack
+            await websocket.recv()
+
+            message = await websocket.recv()
+            if not 'result' in message:
+                responses[payload['id']] = message
+            # break
+
+
+# import threading
+# threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
+
+
+if __name__ == '__main__':
+    import threading
+        
+    threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
+
+    print(Binance.get_order_book('LUNAUSDT'))
+    print(Binance.get_order_book('ETHUSDT'))
+    print(Binance.get_order_book('BTCUSDT'))

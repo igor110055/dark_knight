@@ -23,6 +23,10 @@ def load_triangulars(file_path='triangulars.pickle'):
         return pickle.load(file)
 
 
+def get_symbols():
+    return list(load_triangulars().keys())
+
+
 def get_triangulars():
     symbols = SymbolService.load_symbols()
 

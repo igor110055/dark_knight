@@ -16,11 +16,19 @@ def update_order_book(response: dict):
     # move to one off check
     if not has_order_book_initialized(response):
         cached_responses.setdefault(symbol, []).append(response)
-        return get_order_book_snapshot.delay(symbol)
+        return get_order_book_snapshot(symbol)
 
     if symbol in last_sequences:
         if start_sequence != last_sequences[symbol] + 1:
-            last_update_ids[symbol] = None
+            last_update_ids[symbol] = None  # invalidate has_order_book_initialized
+            return
+
+    sync_orders(response)
+
+def sync_orders(response):
+    symbol = response['s']
+    end_sequence = response['u']
+
     last_sequences[symbol] = end_sequence
 
     order_book_ob = OrderBook.get(symbol)
@@ -42,6 +50,12 @@ def update_order_book(response: dict):
 
     order_book_ob.save(order_book)
 
+    # FIXME: not sure if this is necessary
+    consolidate_order_book(response, order_book, order_book_ob)
+
+
+def consolidate_order_book(response, order_book, order_book_ob):
+    symbol = response['s']
     if order_book['bids'] and order_book['asks']:
         best_bid = max(order_book['bids'])
         best_ask = min(order_book['asks'])
@@ -52,7 +66,7 @@ def update_order_book(response: dict):
             # order_book_ob.clear()
             cached_responses.setdefault(symbol, []).append(response)
             last_update_ids[symbol] = None
-            # get_order_book_snapshot.delay(symbol)
+            # get_order_book_snapshot(symbol)
 
         else:
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
@@ -65,7 +79,7 @@ def get_order_book_snapshot(symbol):
     last_update_id = data.pop('lastUpdateId', None)
 
     if last_update_id is None:
-        return get_order_book_snapshot.delay(symbol)
+        return get_order_book_snapshot(symbol)
 
     last_update_ids[symbol] = last_update_id
 
@@ -89,7 +103,7 @@ def apply_cached_response(symbol):
             continue
 
         if not is_subsequent_response(response):
-            return get_order_book_snapshot.delay(symbol)
+            return get_order_book_snapshot(symbol)
 
         update_order_book(response)
         last_sequences[symbol] = response['u']
