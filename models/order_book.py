@@ -11,9 +11,7 @@ class OrderBook:
     def __init__(self, symbol) -> None:
         self.symbol = symbol
         self.bids_key = f"{self.symbol}:bids"
-        self.bids_prices = []
         self.asks_key = f"{self.symbol}:asks"
-        self.asks_prices = []
         self.redis = get_client()
         self.book = None
 
@@ -24,11 +22,9 @@ class OrderBook:
 
         if bids:
             self.redis.hmset(f"{self.bids_key}", bids)
-            self.bids_prices = bids.keys()  # float
 
         if asks:
             self.redis.hmset(f"{self.asks_key}", asks)
-            self.asks_prices = asks.keys()  # float
 
     # def delete(self, side, price):
     #     self.redis.srem(f"{self.symbol}:{side}:prices", price)
@@ -50,10 +46,10 @@ class OrderBook:
         return {'bids': self.get_best_bids(top), 'asks': self.get_best_asks(top)}
 
     def get_best_bids(self, top=None):
-        if not self.bids_prices:
+        if not (bids_prices := self.redis.hkeys(self.bids_key)):
             return []
 
-        bids_prices = sorted(self.bids_prices, reverse=True)
+        bids_prices = sorted([float(price) for price in bids_prices], reverse=True)
 
         if top is not None:
             bids_prices = bids_prices[:top]
@@ -63,10 +59,10 @@ class OrderBook:
         return bids
 
     def get_best_asks(self, top=None):
-        if not self.asks_prices:
+        if not (asks_prices := self.redis.hkeys(self.asks_key)):
             return []
 
-        asks_prices = sorted(self.asks_prices)
+        asks_prices = sorted(float(price) for price in asks_prices)
 
         if top is not None:
             asks_prices = asks_prices[:top]
