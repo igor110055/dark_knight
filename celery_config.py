@@ -1,9 +1,9 @@
 ## Broker settings.
 # broker_url = 'amqp://guest:guest@localhost:5672//'
-broker_url = 'redis://localhost:6379/3'
+broker_url = 'redis+socket:///var/run/redis/redis.sock'
 
 # List of modules to import when the Celery worker starts.
-imports = ('tasks.order_book_task', 'tasks.websocket_task', 'tasks.order_task')
+imports = ('tasks.order_book_task', 'tasks.order_task')
 worker_prefetch_multiplier = 32
 ## Using the database to store task state and results.
 # result_backend = 'redis://localhost:6379/2'

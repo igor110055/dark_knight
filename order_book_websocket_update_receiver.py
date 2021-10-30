@@ -1,21 +1,19 @@
 import asyncio
 
-import concurrent.futures
-
-
 import simplejson as json
 import websockets
-
-from multiprocessing import Manager, Process
 
 from models.order_book import OrderBook
 from tasks.order_book_task import update_order_book
 from tasks.order_task import check_arbitrage
 from utils import chunks
 
+from redis_client import get_client
+
+redis = get_client()
+
 WS_URL = "wss://stream.binance.com:9443/ws"
 
-import pdb
 async def connect(url, symbols, callback=None, timeout=60*15):
     params = []
     order_books = {}
@@ -38,7 +36,8 @@ async def connect(url, symbols, callback=None, timeout=60*15):
         await websocket.recv()
 
         async for message in websocket:
-            responses.put_nowait(message)
+            # responses.put_nowait(message)
+            redis.lpush('responses', message)
             # update_order_book.delay(response)
             # symbol = response['s']
             # callback(symbol)
@@ -68,30 +67,6 @@ from exchanges.binance import Binance, websocket_pool
 
 from time import time
 
-def handle_response():
-    start = time()
-    while True:
-        if responses.empty():
-            continue
-        response = responses.get()
-        if response:
-            # response = json.loads(response)
-            # update_order_book(response)
-            # symbol = response['s']
-            print(responses.qsize())
-            # print(symbol, Binance.get_order_book(symbol))
-        
-        # if time() - start > 2:
-        #     break
-            # trading(symbol)
-        # print(responses.qsize())
-
-# TODO?
-def multi_handle_response():
-    for i in range(2):
-        threading.Thread(target=handle_response).start()
-
-
 async def main():
     from triangular_finder import get_symbols
 
@@ -100,13 +75,14 @@ async def main():
     tasks = []
     # loop = asyncio.get_event_loop()
 
-    for symbols in chunks(all_symbols, 200):
+    # tasks.append(asyncio.create_task(connect(WS_URL, ['LUNAUSDT'])))
+
+    for symbols in chunks(all_symbols, 10):
         tasks.append(asyncio.create_task(connect(WS_URL, symbols)))
+        break
 
     try:
         await asyncio.gather(*tasks)
-        # for task in tasks:
-        #     loop.run_until_complete(task)
     except:
         for t in tasks:
             t.cancel()
@@ -114,21 +90,8 @@ async def main():
 
 if __name__ == '__main__':
     import sys
-    from threading import Thread
-    from queue import Queue
 
-    manager = Manager()
-    responses = manager.Queue()
     try:
-        loop = asyncio.get_event_loop()
-        # loop.create_task(websocket_pool())
-        # threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
-        # for _ in range(10):
-        #     threading.Thread(target=handle_response).start()
-        for _ in range(4):
-            Process(target=handle_response).start()
-        loop.create_task(main())
-        loop.run_forever()
-        # main()
+        asyncio.run(main())
     except KeyboardInterrupt:
         sys.exit(1)

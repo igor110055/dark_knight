@@ -9,6 +9,7 @@ simplejson
 redis
 websocket-client
 urllib3
+hiredis
 
 # dev
 pytest
