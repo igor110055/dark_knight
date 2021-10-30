@@ -94,6 +94,7 @@ class Binance:
 
     @staticmethod
     def get_order_book(symbol, id=999999):
+        redis.delete('payloads')
         payload = {
             "method": "SUBSCRIBE",
             'params': [f'{symbol.lower()}@depth20@100ms'],
@@ -102,12 +103,10 @@ class Binance:
 
         redis.lpush('payloads', json.dumps(payload))
 
-        while not (message := redis.rpop('snapshots')):
-            sleep(0.1)
+        while not (message := redis.hget('snapshots', id)):
+            continue
 
-        # payload['method'] = 'UNSUBSCRIBE'
-        # redis.lpush('payloads', json.dumps(payload))
-
+        redis.hdel('snapshots', id)
         resp = json.loads(message)
         # print(resp['lastUpdateId'])
         return resp
@@ -154,7 +153,7 @@ def get_client():
     return Binance(api_key, secret_key)
 
 
-async def websocket_pool(num=5):
+async def websocket_pool(num=10):
     tasks = []
     for _ in range(num):
         tasks.append(asyncio.create_task(connect("wss://stream.binance.com:9443/ws")))
@@ -167,11 +166,21 @@ async def connect(url, timeout=60*15):
         while True:
             while not (payload := redis.rpop('payloads')):
                 await asyncio.sleep(0)
+
+            message_id = json.loads(payload)['id']
             await websocket.send(payload)
 
+            message_received = False
             async for message in websocket:
-                if not 'result' in message:
-                    redis.lpush('snapshots', message)
+                if not 'result' in message:  # juice
+                    redis.hset('snapshots', message_id, message)
+                    await websocket.send(payload.replace('SUBSCRIBE', 'UNSUBSCRIBE'))
+                    message_received = True
+                elif message_received:  # cleanup
+                    if 'result' in message:
+                        break
+                else:
+                    print(message)  #ack
 
 
 
@@ -181,10 +190,10 @@ if __name__ == '__main__':
         
     threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
 
-
     for i in range(10):
-        Binance.get_order_book('BTCUSDT')
-        Binance.get_order_book('LUNAUSDT')
-        Binance.get_order_book('ETHUSDT')
+        print(Binance.get_order_book('BTCUSDT', i))
+        print(Binance.get_order_book('ETHUSDT', i + 10))
+        print(Binance.get_order_book('LUNAUSDT', i + 20))
+     
     print('done')
     # print(Binance.get_order_book('BTCUSDT', 200))
