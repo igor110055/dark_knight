@@ -1,7 +1,6 @@
 from exchanges.binance import Binance
 
 
-
 class TestBinance:
     def test_get_order_book__return_valid_order_book(self):
         symbol = 'ETHUSDT'
