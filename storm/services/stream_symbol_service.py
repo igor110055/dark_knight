@@ -4,9 +4,8 @@ from typing import List
 
 import simplejson as json
 import websockets
-from storm.clients.redis_client import FRedis, get_client
-from storm.tasks.order_task import check_arbitrage
-from storm.utils import chunks, get_logger
+from ..clients.redis_client import FRedis, get_client
+from ..utils import chunks, get_logger
 
 redis = get_client(a_sync=False)
 logger = get_logger(__file__)
@@ -38,38 +37,26 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
         message = await websocket.recv()
 
         async for message in websocket:
-        # while True:
-        #     message = await websocket.recv()
+            # while True:
+            #     message = await websocket.recv()
 
             logger.info(f'websocket update received on {message[19:52]} ...')
             redis.lpush('responses', message)
 
-            # print(symbol, order_books[symbol].best_prices)
-            # print(symbol, order_books[symbol].get_best(1))
-
-
-def trading(symbol):
-    if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
-        symbol = 'LUNAUSDT'
-        synthetic = {
-            'LUNABNB': {'normal': True},
-            'BNBUSDT': {'normal': True}
-        }
-        check_arbitrage(symbol, synthetic, 0.3)
-
 
 if __name__ == '__main__':
-    from storm.exchanges.binance import WS_URL
-    from triangular_finder import get_symbols
-
-    all_symbols = get_symbols()
+    from ..exchanges.binance import WS_URL
+    from ..helpers.triangular_finder import get_symbols
 
     loop = asyncio.get_event_loop()
 
     tasks = []
+    all_symbols = get_symbols()
     for symbols in chunks(all_symbols, 10):
         tasks.append(loop.create_task(stream_symbols(WS_URL, symbols)))
         break
+
+    # tasks.append(loop.create_task(stream_symbols(WS_URL, ['LUNDUSDT'])))
 
     try:
         loop.run_forever()
