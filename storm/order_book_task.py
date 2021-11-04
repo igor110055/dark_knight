@@ -2,12 +2,13 @@ import asyncio
 
 import simplejson as json
 
-from .exchanges.binance import Binance
+from .clients.redis_client import get_client
 from .exchanges.binance import get_client as get_binance_client
 from .models.order_book import OrderBook
-from .clients.redis_client import get_client
+from .utils import symbol_lock
 
 redis = get_client(a_sync=False)
+binance = get_binance_client()
 
 
 def update_order_book(response: dict, redis=redis, from_cache=False):
@@ -16,7 +17,6 @@ def update_order_book(response: dict, redis=redis, from_cache=False):
     start_sequence = response['U']
     end_sequence = response['u']
 
-    # move to one off check
     # while not response or not has_order_book_initialized(response):
     if not redis.hget('initialized', symbol):
         redis.rpush('cached_responses:'+symbol, json.dumps(response))  # TODO: to slow, need to separate response receive and handling
@@ -46,7 +46,6 @@ def sync_orders(response):
 
     order_book_ob = OrderBook.get(symbol)
     order_book = order_book_ob.get_book()
-    # print(order_book)
 
     for price, amount in response['b']:
         price = float(price)
@@ -64,7 +63,6 @@ def sync_orders(response):
 
     order_book_ob.save(order_book)
 
-    # print(order_book)
     # FIXME: not sure if this is necessary
     # consolidate_order_book(response, order_book, order_book_ob)
 
@@ -87,9 +85,7 @@ def consolidate_order_book(response, order_book, order_book_ob):
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
 
-binance = get_binance_client()
 def get_order_book_snapshot(symbol):
-    # print('Get order book for:', symbol)
     data = binance.get_order_book(symbol)
 
     if redis.hget('initialized', symbol):
@@ -115,10 +111,6 @@ def get_order_book_snapshot(symbol):
 
     order_book_ob.save(order_book)
 
-    # print(symbol)
-
-    # print(order_book)
-    # return order_book
     # now = int(time() * 1000)
 
     # bids = {float(price): [size, now] for price, size in data['bids']}
@@ -135,46 +127,44 @@ def apply_cached_response(symbol, count=10):
     if not (responses := redis.lrange('cached_responses:'+symbol, 0, -1)):
         return
 
-    if not redis.setnx(f'working_on_{symbol}', 1):
-        print('Working')
-        return
+    # if not redis.setnx(f'working_on_{symbol}', 1):
+    #     print('Working')
+    #     return
 
-    print('Got the lock')
+    with symbol_lock(redis, symbol):
+        print('Got the lock')
 
-    for response in responses:
-        response = json.loads(response)
+        for response in responses:
+            response = json.loads(response)
 
-        if response['u'] <= int(redis.hget('last_update_ids', symbol)):
-            continue
+            if response['u'] <= int(redis.hget('last_update_ids', symbol)):
+                continue
 
-        initialized = redis.hget('initialized', symbol)
-        if not initialized:
-            if has_order_book_initialized(response):
-                redis.hset('initialized', symbol, 1)
-                redis.hset('last_sequences', symbol, response['u'])
-                print('Initialized')
+            initialized = redis.hget('initialized', symbol)
+            if not initialized:
+                if has_order_book_initialized(response):
+                    redis.hset('initialized', symbol, 1)
+                    redis.hset('last_sequences', symbol, response['u'])
+                    print('Initialized')
 
-                # special handling for the first valid response
-                update_order_book(response, from_cache=True)
-                redis.hset('last_sequences', symbol, response['u'])
-            
-            continue
+                    # special handling for the first valid response
+                    update_order_book(response, from_cache=True)
+                    redis.hset('last_sequences', symbol, response['u'])
+                
+                continue
 
-        if not is_subsequent_response(response):
-            print('Del')
-            redis.hdel('initialized', symbol)  # reset initialized status
-            return
+            if not is_subsequent_response(response):
+                print('Del')
+                redis.hdel('initialized', symbol)  # reset initialized status
+                return
 
-        update_order_book(response, from_cache=True)
-        redis.hset('last_sequences', symbol, response['u'])
+            update_order_book(response, from_cache=True)
+            redis.hset('last_sequences', symbol, response['u'])
 
-    # redis.delete('cached_responses:'+symbol)  # remove stale responses
+    redis.delete('cached_responses:'+symbol)  # remove stale responses
 
-    redis.delete(f'working_on_{symbol}')
+    # redis.delete(f'working_on_{symbol}')
     print('Release Lock')
-
-    # redis.delete('cached_responses:'+symbol)
-
 
 
 def has_order_book_initialized(response):
@@ -230,19 +220,14 @@ async def handle_response():
                 # print(redis.llen('responses'))
             # print(symbol, Binance.get_order_book(symbol))
 
-import concurrent.futures
-from multiprocessing import Pool, Process
-
-# pool = Pool()
-
 
 if __name__ == '__main__':
     redis.delete('last_update_ids', 'last_sequences', 'cached_responses', 'initialized')
     from .order_book_websocket_update_receiver import WS_URL, connect
     
     loop = asyncio.get_event_loop()
-    redis.delete('working_on_ETHUSDT', 'working_on_LUNAUSDT', 'initialized')
+    # redis.delete('working_on_ETHUSDT', 'working_on_LUNAUSDT', 'initialized')
 
-    loop.create_task(connect(WS_URL, ['ETHUSDT', 'LUNAUSDT']))
+    loop.create_task(connect(WS_URL, ['ETHUSDT', 'LUNAUSDT', 'BTCUSDT']))
     loop.create_task(handle_response())
     loop.run_forever()

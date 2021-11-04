@@ -1,3 +1,7 @@
+import sys
+from queue import Queue
+from time import sleep
+import pdb
 import asyncio
 import csv
 import hashlib
@@ -13,7 +17,6 @@ import requests.adapters
 import simplejson as json
 import websockets
 from dotenv import load_dotenv
-
 from storm.clients.redis_client import get_client
 
 load_dotenv()
@@ -34,7 +37,6 @@ message_hash_key = secret_key.encode('utf-8')
 redis = get_client()
 
 
-
 def _request(method, path, params):
     # TODO: suspect hashing key is a bit slow
     # params['timestamp'] = timestamp
@@ -49,12 +51,6 @@ def _request(method, path, params):
     url = urljoin(BASE_URL, path)
     response = session.request(method, url, headers=headers, params=params)
     return response.json()
-
-if os.getenv('WS_POOL'):
-    pass
-
-import pdb
-from time import sleep
 
 
 class Binance:
@@ -99,7 +95,7 @@ class Binance:
     @staticmethod
     def get_order_book(symbol, id=None):
         # redis.delete('payloads')
-        id = id or random.randint(1,100)
+        id = id or random.randint(1, 100)
         payload = {
             "method": "SUBSCRIBE",
             'params': [f'{symbol.lower()}@depth10@100ms'],
@@ -115,7 +111,7 @@ class Binance:
         resp = json.loads(message)
         # print(resp['lastUpdateId'])
         return resp
-    
+
     def get_order_book(self, symbol):
         return self.get(f"api/v3/depth?symbol={symbol}", raw=True)
 
@@ -164,11 +160,10 @@ def get_client():
 async def websocket_pool(num=8):
     tasks = []
     for _ in range(num):
-        tasks.append(asyncio.create_task(connect("wss://stream.binance.com:9443/ws")))
+        tasks.append(asyncio.create_task(
+            connect("wss://stream.binance.com:9443/ws")))
 
     await asyncio.gather(*tasks)
-
-from queue import Queue
 
 
 async def handle(websocket, sleep_duration):
@@ -194,8 +189,7 @@ async def handle(websocket, sleep_duration):
 
                 message_received = True
             else:
-                print(message)  #ack
-import sys
+                print(message)  # ack
 
 
 async def connect(url, timeout=60*15, sleep_duration=0.5):
@@ -213,7 +207,6 @@ async def connect(url, timeout=60*15, sleep_duration=0.5):
                     sys.exit()
                     raise Exception('No!')
                     break
-
 
 
 # from websocket import WebSocketApp
@@ -244,18 +237,17 @@ async def connect(url, timeout=60*15, sleep_duration=0.5):
 # def on_message(ws, message):
 
 
-
 if __name__ == '__main__':
     redis.delete('payloads', 'snapshots', 'initialized')
     import threading
-        
+
     threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
 
     for i in range(100):
         print(Binance.get_order_book('BTCUSDT'))
         print(Binance.get_order_book('ETHUSDT'))
         print(Binance.get_order_book('LUNAUSDT'))
-     
+
     print('done')
 
     # asyncio.run(websocket_pool())
