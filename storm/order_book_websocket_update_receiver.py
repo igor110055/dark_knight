@@ -7,7 +7,7 @@ from .models.order_book import OrderBook
 from .tasks.order_task import check_arbitrage
 from .utils import chunks
 
-from .redis_client import get_client
+from .clients.redis_client import get_client
 
 redis = get_client(a_sync=False)
 

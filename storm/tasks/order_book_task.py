@@ -3,12 +3,13 @@ import sys
 sys.path.append('/home/ec2-user/develop/dark_knight')
 
 
-from ..binance import Binance
-import simplejson as json
-from ..models.order_book import OrderBook
-from ..redis_client import get_client
-from multiprocessing import Pool, Manager
+from multiprocessing import Manager, Pool
 
+import simplejson as json
+
+from ..clients.redis_client import get_client
+from ..exchanges.binance import Binance
+from ..models.order_book import OrderBook
 
 redis = get_client()
 
@@ -167,9 +168,9 @@ def is_subsequent_response(response):
 # last_sequences = manager.dict()
 # cached_responses = manager.dict()
 
+import asyncio
 import pdb
 
-import asyncio
 
 async def main():
     while True:
@@ -205,6 +206,7 @@ def handle_response():
 if __name__ == '__main__':
 
     from multiprocessing import Pool, Process
+
     # pool = Pool(4)
 
 

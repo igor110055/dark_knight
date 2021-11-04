@@ -1,9 +1,11 @@
 import asyncio
-from .binance import Binance, get_client as get_binance_client
-import simplejson as json
-from .models.order_book import OrderBook
-from .redis_client import get_client
 
+import simplejson as json
+
+from .exchanges.binance import Binance
+from .exchanges.binance import get_client as get_binance_client
+from .models.order_book import OrderBook
+from .clients.redis_client import get_client
 
 redis = get_client(a_sync=False)
 
@@ -228,48 +230,19 @@ async def handle_response():
                 # print(redis.llen('responses'))
             # print(symbol, Binance.get_order_book(symbol))
 
-from multiprocessing import Process, Pool
-
 import concurrent.futures
+from multiprocessing import Pool, Process
 
 # pool = Pool()
 
 
 if __name__ == '__main__':
     redis.delete('last_update_ids', 'last_sequences', 'cached_responses', 'initialized')
-    from .order_book_websocket_update_receiver import connect, WS_URL
+    from .order_book_websocket_update_receiver import WS_URL, connect
     
-    # asyncio.run(handle_response())
-
     loop = asyncio.get_event_loop()
     redis.delete('working_on_ETHUSDT', 'working_on_LUNAUSDT', 'initialized')
 
     loop.create_task(connect(WS_URL, ['ETHUSDT', 'LUNAUSDT']))
     loop.create_task(handle_response())
     loop.run_forever()
-    # loop.run_until_complete(handle_response())
-    # asyncio.run(asyncio.gather(task_connect, task_handle))
-    # asyncio.run(handle_response())
-    # for _ in range(4):
-    #     Process(target=handle_response).start()
-
-
-    # import threading
-    # import asyncio
-
-    # from binance import websocket_pool
-        
-    # threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
-
-    # response = {
-    #     "e":"depthUpdate",
-    #     "E":1635587664771,
-    #     "s":"BNBETH",
-    #     "U":1024042672,
-    #     "u":1024042672,
-    #     "b":[],
-    #     "a":[
-    #         ["0.12210000","213.67300000"]
-    #     ]
-    # }
-    # update_order_book(response)
