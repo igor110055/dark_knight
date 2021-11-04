@@ -9,7 +9,7 @@ def trading(symbol):
             'LUNABNB': {'normal': True},
             'BNBUSDT': {'normal': True}
         }
-        check_arbitrage(symbol, synthetic, 0.3)
+        check_arbitrage(symbol, synthetic, 0)
 
 
 if __name__ == '__main__':

@@ -12,8 +12,8 @@ binance = get_binance_client()
 logger = get_logger(__file__)
 
 
-# POOL = ProcessPoolExecutor(2)
-POOL = None
+POOL = ProcessPoolExecutor(4)
+# POOL = None
 
 def update_order_book(response: dict, redis=redis, from_cache=False):
     symbol = response['s']
@@ -81,6 +81,7 @@ def consolidate_order_book(response, order_book, order_book_ob):
 
         if best_bid > best_ask:
             logger.warning(f"{symbol} bid ask cross! best bid {best_bid}, best ask {best_ask}")
+            redis.hdel('initialized', symbol)
             # last_update_ids[symbol] = None
             # order_book_ob.best_prices = {'bids': 0, 'asks': 0}
             # order_book_ob.clear()

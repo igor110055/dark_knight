@@ -9,6 +9,7 @@ from functools import lru_cache
 from queue import Queue
 from time import time
 from urllib.parse import urlencode, urljoin
+from uuid import uuid4
 
 import requests
 import requests.adapters
@@ -17,7 +18,11 @@ import websockets
 from dotenv import load_dotenv
 from storm.clients.redis_client import get_client
 
+from ..utils import get_logger
+
 load_dotenv()
+
+logger = get_logger(__file__)
 
 api_key = os.getenv('API_KEY')
 secret_key = os.getenv('SECRET_KEY')
@@ -112,7 +117,11 @@ class Binance:
         return resp
 
     def get_order_book(self, symbol):
-        return self.get(f"api/v3/depth?symbol={symbol}", raw=True).json()
+        request_uuid = uuid4()
+        logger.info(f'[{request_uuid}] GET order book request for {symbol}')
+        resp = self.get(f"api/v3/depth?symbol={symbol}", raw=True)
+        logger.info(f'[{request_uuid}] GET order book response for {symbol}: {resp.content.decode()[:20]}')
+        return resp.json()
 
     def load_markets(self):
         return self.get('api/v3/exchangeInfo')
