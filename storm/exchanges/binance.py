@@ -1,14 +1,12 @@
-import sys
-from queue import Queue
-from time import sleep
-import pdb
 import asyncio
 import csv
 import hashlib
 import hmac
 import os
 import random
+import sys
 from functools import lru_cache
+from queue import Queue
 from time import time
 from urllib.parse import urlencode, urljoin
 
@@ -24,11 +22,12 @@ load_dotenv()
 api_key = os.getenv('API_KEY')
 secret_key = os.getenv('SECRET_KEY')
 
-BASE_URL = 'https://api.binance.com'
+REST_URL = 'https://api.binance.com'
+WS_URL = "wss://stream.binance.com:9443/ws"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=500, pool_maxsize=500)
-session.mount(BASE_URL, adapter)
+session.mount(REST_URL, adapter)
 
 headers = {'X-MBX-APIKEY': api_key}
 message_hash_key = secret_key.encode('utf-8')
@@ -48,7 +47,7 @@ def _request(method, path, params):
         params['signature'] = hmac.new(
             message_hash_key, msg, digestmod=hashlib.sha256).hexdigest()
 
-    url = urljoin(BASE_URL, path)
+    url = urljoin(REST_URL, path)
     response = session.request(method, url, headers=headers, params=params)
     return response.json()
 
@@ -113,11 +112,11 @@ class Binance:
         return resp
 
     def get_order_book(self, symbol):
-        return self.get(f"api/v3/depth?symbol={symbol}", raw=True)
+        return self.get(f"api/v3/depth?symbol={symbol}", raw=True).json()
 
     def load_markets(self):
         return self.get('api/v3/exchangeInfo')
-        # return session.get(urljoin(BASE_URL, 'api/v3/exchangeInfo')).json()
+        # return session.get(urljoin(REST_URL, 'api/v3/exchangeInfo')).json()
 
     def __is_larger_than_zero(self, balance):
         return all((balance != '0.00000000', balance != '0.00'))
@@ -125,13 +124,8 @@ class Binance:
     @staticmethod
     def get(path, params=None, raw=False):
         if raw:
-            url = urljoin(BASE_URL, path)
-            response = session.get(url, params=params)
-            if response.status_code == 200:
-                return response.json()
-                # return json.loads(session.get(url, params=params).content)
-            else:
-                return None
+            url = urljoin(REST_URL, path)
+            return session.get(url, params=params)
         return _request('GET', path, params)
 
     @staticmethod

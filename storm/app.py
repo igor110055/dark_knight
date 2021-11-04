@@ -1,5 +1,4 @@
 import asyncio
-import simplejson as json
 import threading
 from decimal import Decimal
 

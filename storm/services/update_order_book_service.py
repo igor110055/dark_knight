@@ -1,14 +1,14 @@
 import asyncio
 
 import simplejson as json
-
-from .clients.redis_client import get_client
-from .exchanges.binance import get_client as get_binance_client
-from .models.order_book import OrderBook
-from .utils import symbol_lock
+from storm.clients.redis_client import get_client
+from storm.exchanges.binance import get_client as get_binance_client
+from storm.models.order_book import OrderBook
+from storm.utils import symbol_lock, get_logger
 
 redis = get_client(a_sync=False)
 binance = get_binance_client()
+logger = get_logger(__file__)
 
 
 def update_order_book(response: dict, redis=redis, from_cache=False):
@@ -19,27 +19,31 @@ def update_order_book(response: dict, redis=redis, from_cache=False):
 
     # while not response or not has_order_book_initialized(response):
     if not redis.hget('initialized', symbol):
-        redis.rpush('cached_responses:'+symbol, json.dumps(response))  # TODO: to slow, need to separate response receive and handling
+        # TODO: to slow, need to separate response receive and handling
+        redis.rpush('cached_responses:'+symbol, json.dumps(response))
         loop = asyncio.get_event_loop()
         return loop.run_in_executor(None, get_order_book_snapshot, symbol)
 
     # if redis.hget('last_sequences', symbol):
     # if redis.hget('initialized', symbol):
-    print(symbol, 'start', start_sequence, redis.hget('last_sequences', symbol))
+    logger.info(f"{symbol} update: start sequence {start_sequence}, last sequence {redis.hget('last_sequences', symbol)}")
     if start_sequence != int(redis.hget('last_sequences', symbol)) + 1:  # TODO: use incr
         if not from_cache:
-            print('reset', start_sequence, redis.hget('last_sequences', symbol))
+            logger.info(f"{symbol} reset: {start_sequence}, {redis.hget('last_sequences', symbol)}")
             redis.hdel('initialized', symbol)
-            redis.hdel('last_update_ids', symbol)  # invalidate has_order_book_initialized
+            redis.hdel('last_update_ids', symbol)
             redis.hdel('last_sequences', symbol)
             redis.rpush('cached_responses:'+symbol, json.dumps(response))
         return
 
     sync_orders(response)
 
+
 def sync_orders(response):
-    print('success')
     symbol = response['s']
+
+    logger.info(f'syncing order updates for {symbol}')
+
     end_sequence = response['u']
 
     redis.hset('last_sequences', symbol, end_sequence)
@@ -87,7 +91,6 @@ def consolidate_order_book(response, order_book, order_book_ob):
 
 def get_order_book_snapshot(symbol):
     data = binance.get_order_book(symbol)
-
     if redis.hget('initialized', symbol):
         return
 
@@ -122,7 +125,7 @@ def get_order_book_snapshot(symbol):
 def apply_cached_response(symbol, count=10):
     # if not (responses := redis.rpop('cached_responses:'+symbol, count)):
     #     return
-    
+
     # TODO: compare rpop, lrange and stream performance
     if not (responses := redis.lrange('cached_responses:'+symbol, 0, -1)):
         return
@@ -132,7 +135,7 @@ def apply_cached_response(symbol, count=10):
     #     return
 
     with symbol_lock(redis, symbol):
-        print('Got the lock')
+        logger.info(f'Got the lock for {symbol}')
 
         for response in responses:
             response = json.loads(response)
@@ -145,16 +148,16 @@ def apply_cached_response(symbol, count=10):
                 if has_order_book_initialized(response):
                     redis.hset('initialized', symbol, 1)
                     redis.hset('last_sequences', symbol, response['u'])
-                    print('Initialized')
+                    logger.info(f"Initialized {symbol}")
 
                     # special handling for the first valid response
                     update_order_book(response, from_cache=True)
                     redis.hset('last_sequences', symbol, response['u'])
-                
+
                 continue
 
             if not is_subsequent_response(response):
-                print('Del')
+                logger.info(f'Uninitialized {symbol}')
                 redis.hdel('initialized', symbol)  # reset initialized status
                 return
 
@@ -164,7 +167,7 @@ def apply_cached_response(symbol, count=10):
     redis.delete('cached_responses:'+symbol)  # remove stale responses
 
     # redis.delete(f'working_on_{symbol}')
-    print('Release Lock')
+    logger.info(f'Release the lock for {symbol}')
 
 
 def has_order_book_initialized(response):
@@ -177,7 +180,7 @@ def has_order_book_initialized(response):
     if not (last_update_id := redis.hget('last_update_ids', symbol)):
         return False
 
-    print('initialized check', start_sequence, last_update_id, end_sequence, start_sequence <= int(last_update_id) + 1 <= end_sequence)
+    print(f"Initialized check: {symbol} {start_sequence}, {last_update_id}, {end_sequence}")
     return start_sequence <= int(last_update_id) + 1 <= end_sequence
 
 
@@ -189,7 +192,7 @@ def is_subsequent_response(response):
     if not (last_sequence := redis.hget('last_sequences', symbol)):
         return False
     if not (start_sequence == int(last_sequence) + 1):
-        print('subsequent', start_sequence, int(last_sequence) + 1)
+        logger.info(f"Subsequent response: {symbol}, {start_sequence}, {int(last_sequence) + 1}")
     return start_sequence == int(last_sequence) + 1
 
 
@@ -197,14 +200,14 @@ async def handle_response():
     # await redis.delete('last_update_ids', 'last_sequences', 'cached_responses', 'initialized')
     loop = asyncio.get_event_loop()
     while True:
-        responses = redis.rpop('responses', 10)
+        responses = redis.rpop('responses', 20)
         if not responses:
             await asyncio.sleep(0)
             continue
         # if not (responses := redis.rpop('responses', 1)):
         #     await asyncio.sleep(1)
         #     continue
-        
+
         # if responses.empty():
         #     continue
         # response = responses.get()
@@ -222,12 +225,19 @@ async def handle_response():
 
 
 if __name__ == '__main__':
-    redis.delete('last_update_ids', 'last_sequences', 'cached_responses', 'initialized')
-    from .order_book_websocket_update_receiver import WS_URL, connect
-    
+    redis.delete('last_update_ids', 'last_sequences',
+                 'cached_responses', 'initialized')
+    from .stream_symbol_service import stream_symbols
+    from storm.exchanges.binance import WS_URL
+
     loop = asyncio.get_event_loop()
     # redis.delete('working_on_ETHUSDT', 'working_on_LUNAUSDT', 'initialized')
 
-    loop.create_task(connect(WS_URL, ['ETHUSDT', 'LUNAUSDT', 'BTCUSDT']))
-    loop.create_task(handle_response())
-    loop.run_forever()
+    stream_task = loop.create_task(stream_symbols(WS_URL, ['ETHUSDT', 'LUNAUSDT', 'BTCUSDT']))
+    handle_response_task = loop.create_task(handle_response())
+
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        stream_task.cancel()
+        handle_response_task.cancel()
