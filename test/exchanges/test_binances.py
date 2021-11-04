@@ -1,4 +1,4 @@
-from exchanges.binance import Binance
+from storm.exchanges.binance import Binance
 
 
 class TestBinance:

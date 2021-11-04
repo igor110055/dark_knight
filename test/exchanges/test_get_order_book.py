@@ -1,8 +1,8 @@
 import asyncio
 from time import sleep
-from order_book_websocket_update_receiver import connect, WS_URL
+from storm.order_book_websocket_update_receiver import connect, WS_URL
 # from order_book_task import 
-from redis_client import get_client  # test get redis
+from storm.redis_client import get_client  # test get redis
 from threading import Thread
 
 

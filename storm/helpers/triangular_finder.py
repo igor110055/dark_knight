@@ -1,7 +1,9 @@
 import pickle
 
 import networkx as nx
-from services.symbol_service import SymbolService
+
+from .symbol_finder import load_symbols
+
 
 def dump_triangulars(file_path='triangulars.pickle'):
     triangulars = get_triangulars()
@@ -27,8 +29,8 @@ def get_symbols():
     return list(load_triangulars().keys())
 
 
-def get_triangulars():
-    symbols = SymbolService.load_symbols()
+def get_triangulars(symbols=None):
+    symbols = symbols or load_symbols()
 
     G = nx.Graph()
     for symbol, [base_asset, quote_asset] in symbols.items():

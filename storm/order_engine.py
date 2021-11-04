@@ -8,7 +8,7 @@ from execution_engine import first_triangle_order
 from redis_client import get_client
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 redis = get_client()
 
 

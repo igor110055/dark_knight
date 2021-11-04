@@ -1,14 +1,18 @@
-from celery_app import app, logger
-from models.order_book import OrderBook
-from services.symbol_service import SymbolService
 from datetime import datetime
-
 from decimal import Decimal
 
+from ..helpers.symbol_finder import load_symbols
+from ..models.order_book import OrderBook
+from ..utils import get_logger
 
-SymbolService.load_symbols()
+logger = get_logger(__file__)
+
+
+load_symbols('symbols.csv')
 
 # TODO: refactor two calculate price functions
+
+
 def calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets):
     # best_prices_left = json.loads(
     #     redis.hget('best_prices', left_curr).decode())
@@ -87,9 +91,11 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     best_prices_right = right_order_book.best_prices
 
     # TODO: move left_assets, right_assets to global dict
-    synthetic_ask = calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets)
-    synthetic_bid = calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, right_assets)
-    
+    synthetic_ask = calculate_synthetic_ask(
+        best_prices_left, left_assets, best_prices_right, right_assets)
+    synthetic_bid = calculate_synthetic_bid(
+        best_prices_left, left_assets, best_prices_right, right_assets)
+
     # print(synthetic_bid, synthetic_ask)
     if not synthetic_bid or not synthetic_ask:
         return
@@ -104,18 +110,18 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     #     return
 
     diff_perc = (natural_bid - synthetic_ask) / synthetic_ask * 100
+    logger.info(f'Natural: {natural_symbol}, synthetic: {synthetic}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {diff_perc}')
     if diff_perc > target_perc:
         print(datetime.now(), diff_perc)
         print(f"{natural_symbol}, {synthetic}: 'buy synthetic, sell natural', {natural_bid}, {synthetic_ask}, {diff_perc}")
 
         # if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
         #     print('found')
-            # redis.set('TRADING', 'true', 1)
-            # if engines['USDT'].buy_synthetic_sell_natural(natural_symbol, synthetic, target_perc):
-            #     trade_count += 1
-            # redis.set('TRADING', 'false')
-        
-        
+        # redis.set('TRADING', 'true', 1)
+        # if engines['USDT'].buy_synthetic_sell_natural(natural_symbol, synthetic, target_perc):
+        #     trade_count += 1
+        # redis.set('TRADING', 'false')
+
         # elif natural[-4:] == 'BUSD':
         #     if engines['BUSD'].buy_synthetic_sell_natural(natural, synthetic, best_prices):
         #         trade_count += 1
