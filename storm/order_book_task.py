@@ -1,8 +1,8 @@
 import asyncio
-from binance import Binance, get_client as get_binance_client
+from .binance import Binance, get_client as get_binance_client
 import simplejson as json
-from models.order_book import OrderBook
-from redis_client import get_client
+from .models.order_book import OrderBook
+from .redis_client import get_client
 
 
 redis = get_client(a_sync=False)
@@ -23,7 +23,7 @@ def update_order_book(response: dict, redis=redis, from_cache=False):
 
     # if redis.hget('last_sequences', symbol):
     # if redis.hget('initialized', symbol):
-    print('start', start_sequence, redis.hget('last_sequences', symbol))
+    print(symbol, 'start', start_sequence, redis.hget('last_sequences', symbol))
     if start_sequence != int(redis.hget('last_sequences', symbol)) + 1:  # TODO: use incr
         if not from_cache:
             print('reset', start_sequence, redis.hget('last_sequences', symbol))
@@ -237,7 +237,7 @@ import concurrent.futures
 
 if __name__ == '__main__':
     redis.delete('last_update_ids', 'last_sequences', 'cached_responses', 'initialized')
-    from order_book_websocket_update_receiver import connect, WS_URL
+    from .order_book_websocket_update_receiver import connect, WS_URL
     
     # asyncio.run(handle_response())
 

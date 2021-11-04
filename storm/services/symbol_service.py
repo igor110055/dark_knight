@@ -5,7 +5,7 @@ class SymbolService:
     _symbols = None
 
     @classmethod
-    def load_symbols(cls, file_path='symbols.csv'):
+    def load_symbols(cls, file_path):
         if cls._symbols is not None:
             return cls._symbols
 

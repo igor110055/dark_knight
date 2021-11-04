@@ -31,7 +31,7 @@ session.mount(BASE_URL, adapter)
 headers = {'X-MBX-APIKEY': api_key}
 message_hash_key = secret_key.encode('utf-8')
 
-from redis_client import get_client
+from ..redis_client import get_client
 
 redis = get_client()
 

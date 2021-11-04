@@ -1,12 +1,12 @@
-from celery_app import app, logger
-from models.order_book import OrderBook
-from services.symbol_service import SymbolService
+from ..celery_app import app, logger
+from ..models.order_book import OrderBook
+from ..services.symbol_service import SymbolService
 from datetime import datetime
 
 from decimal import Decimal
 
 
-SymbolService.load_symbols()
+SymbolService.load_symbols('symbols.csv')
 
 # TODO: refactor two calculate price functions
 def calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets):

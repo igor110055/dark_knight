@@ -1,4 +1,4 @@
-from redis_client import get_client
+from ..redis_client import get_client
 
 
 class OrderBook:

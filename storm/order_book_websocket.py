@@ -9,7 +9,7 @@ import websockets
 from multiprocessing import Manager, Process
 
 from models.order_book import OrderBook
-from tasks.order_book_task import update_order_book
+from order_book_task import update_order_book
 from tasks.order_task import check_arbitrage
 from utils import chunks
 
@@ -68,15 +68,19 @@ from exchanges.binance import Binance, websocket_pool
 
 from time import time
 
+import pdb
+from time import sleep
 def handle_response():
     start = time()
     while True:
         if responses.empty():
+            sleep(0.1)
             continue
         response = responses.get()
+        print(response)
         if response:
-            # response = json.loads(response)
-            # update_order_book(response)
+            response = json.loads(response)
+            update_order_book(response)
             # symbol = response['s']
             print(responses.qsize())
             # print(symbol, Binance.get_order_book(symbol))
@@ -85,11 +89,6 @@ def handle_response():
         #     break
             # trading(symbol)
         # print(responses.qsize())
-
-# TODO?
-def multi_handle_response():
-    for i in range(2):
-        threading.Thread(target=handle_response).start()
 
 
 async def main():
@@ -111,24 +110,23 @@ async def main():
         for t in tasks:
             t.cancel()
 
-
 if __name__ == '__main__':
     import sys
-    from threading import Thread
+    import threading
     from queue import Queue
 
     manager = Manager()
-    responses = manager.Queue()
+    responses = Queue()
     try:
-        loop = asyncio.get_event_loop()
+        # loop = asyncio.get_event_loop()
         # loop.create_task(websocket_pool())
         # threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
         # for _ in range(10):
         #     threading.Thread(target=handle_response).start()
         for _ in range(4):
-            Process(target=handle_response).start()
-        loop.create_task(main())
-        loop.run_forever()
+            threading.Thread(target=handle_response).start()
+        # loop.create_task(main())
+        # loop.run_forever()
         # main()
     except KeyboardInterrupt:
         sys.exit(1)

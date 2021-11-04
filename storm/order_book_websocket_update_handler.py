@@ -1,12 +1,21 @@
 import asyncio
 
+import concurrent.futures
+
+
 import simplejson as json
 import websockets
+
+from multiprocessing import Manager, Process, Pool
 
 from models.order_book import OrderBook
 from tasks.order_book_task import update_order_book
 from tasks.order_task import check_arbitrage
 from utils import chunks
+
+from binance import Binance, websocket_pool
+
+from time import time
 
 from redis_client import get_client
 
@@ -14,6 +23,7 @@ redis = get_client()
 
 WS_URL = "wss://stream.binance.com:9443/ws"
 
+import pdb
 async def connect(url, symbols, callback=None, timeout=60*15):
     params = []
     order_books = {}
@@ -63,35 +73,14 @@ def trading(symbol):
         }
         check_arbitrage(symbol, synthetic, 0.3)
 
-from exchanges.binance import Binance, websocket_pool
-
-from time import time
-
-async def main():
-    from triangular_finder import get_symbols
-
-    all_symbols = get_symbols()
-
-    tasks = []
-    # loop = asyncio.get_event_loop()
-
-    # tasks.append(asyncio.create_task(connect(WS_URL, ['LUNAUSDT'])))
-
-    for symbols in chunks(all_symbols, 10):
-        tasks.append(asyncio.create_task(connect(WS_URL, symbols)))
-        break
-
-    try:
-        await asyncio.gather(*tasks)
-    except:
-        for t in tasks:
-            t.cancel()
-
 
 if __name__ == '__main__':
     import sys
 
     try:
-        asyncio.run(main())
+        asyncio.run(websocket_pool())
+        # import threading
+        
+        # threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
     except KeyboardInterrupt:
         sys.exit(1)

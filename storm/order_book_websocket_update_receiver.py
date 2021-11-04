@@ -1,30 +1,19 @@
 import asyncio
 
-import concurrent.futures
-
-
 import simplejson as json
 import websockets
 
-from multiprocessing import Manager, Process, Pool
+from .models.order_book import OrderBook
+from .tasks.order_task import check_arbitrage
+from .utils import chunks
 
-from models.order_book import OrderBook
-from tasks.order_book_task import update_order_book
-from tasks.order_task import check_arbitrage
-from utils import chunks
+from .redis_client import get_client
 
-from binance import Binance, websocket_pool
-
-from time import time
-
-from redis_client import get_client
-
-redis = get_client()
+redis = get_client(a_sync=False)
 
 WS_URL = "wss://stream.binance.com:9443/ws"
 
-import pdb
-async def connect(url, symbols, callback=None, timeout=60*15):
+async def connect(url, symbols, callback=None, timeout=60*15, redis=redis):
     params = []
     order_books = {}
     for symbol in symbols:
@@ -43,11 +32,15 @@ async def connect(url, symbols, callback=None, timeout=60*15):
         await websocket.send(json.dumps(payload))
 
         # ack
-        await websocket.recv()
+        message = await websocket.recv()
 
-        async for message in websocket:
+        while True:
+            message = await websocket.recv()
+        # async for message in websocket:
             # responses.put_nowait(message)
+            # print(message)
             redis.lpush('responses', message)
+            await asyncio.sleep(0)
             # update_order_book.delay(response)
             # symbol = response['s']
             # callback(symbol)
@@ -73,33 +66,36 @@ def trading(symbol):
         }
         check_arbitrage(symbol, synthetic, 0.3)
 
-def handle_response():
-    start = time()
-    while True:
-        if not (response := redis.rpop('responses', 10)):
-            continue
-        
-        # if responses.empty():
-        #     continue
-        # response = responses.get()
-        if response:
-            for _response in response:
-                response = json.loads(_response)
-                update_order_book(response)
-                # pool.apply(update_order_book, (response, ))
-            # symbol = response['s']
-                print(redis.llen('responses'))
-            # print(symbol, Binance.get_order_book(symbol))
+from exchanges.binance import Binance, websocket_pool
+
+from time import time
+
+async def main():
+    from triangular_finder import get_symbols
+
+    all_symbols = get_symbols()
+
+    tasks = []
+    # loop = asyncio.get_event_loop()
+
+    # tasks.append(asyncio.create_task(connect(WS_URL, ['LUNAUSDT'])))
+    # print('hi')
+    for symbols in chunks(all_symbols, 10):
+        tasks.append(asyncio.create_task(connect(WS_URL, symbols)))
+        break
+
+    try:
+        await asyncio.gather(*tasks)
+    except:
+        for t in tasks:
+            t.cancel()
 
 
 if __name__ == '__main__':
     import sys
-    pool = Pool(4)
 
+    redis.flushdb()
     try:
-        # Process(target=asyncio.run, args=(websocket_pool(), )).start()
-        for _ in range(4):
-            Process(target=handle_response).start()
-        asyncio.run(websocket_pool())
+        asyncio.run(main())
     except KeyboardInterrupt:
         sys.exit(1)

@@ -1,20 +1,18 @@
-# from celery_app import app
-from binance import Binance
+import sys
+
+sys.path.append('/home/ec2-user/develop/dark_knight')
+
+
+from ..binance import Binance
 import simplejson as json
-from models.order_book import OrderBook
-from redis_client import get_client
+from ..models.order_book import OrderBook
+from ..redis_client import get_client
 from multiprocessing import Pool, Manager
 
 
 redis = get_client()
 
-import pdb
 
-def callback(ob):
-    pdb.set_trace()
-    print(ob)
-
-# @app.task
 def update_order_book(response: dict):
     symbol = response['s']
     epoch = response['E']  # TODO: add to price
@@ -24,17 +22,18 @@ def update_order_book(response: dict):
     # move to one off check
     if not has_order_book_initialized(response):
         redis.lpush('cached_responses:'+symbol, json.dumps(response))  # TODO: to slow, need to separate response receive and handling
-        # return pool.apply(get_order_book_snapshot, (symbol, ))
-        # pool.apply(get_order_book_snapshot, (symbol, ))
-        get_order_book_snapshot(symbol)
-        return
+        return get_order_book_snapshot.delay(symbol)
+        # return redis.lpush('pending_symbols', symbol)
 
     if redis.hget('last_sequences', symbol):
         if start_sequence != int(redis.hget('last_sequences', symbol)) + 1:  # TODO: use incr
             redis.hdel('last_update_ids', symbol)  # invalidate has_order_book_initialized
+            redis.hset('last_sequences', symbol)
+            redis.lpush('cached_responses:'+symbol, json.dumps(response))
             return
 
-    sync_orders(response)
+        print(symbol)
+        sync_orders(response)
 
 def sync_orders(response):
     symbol = response['s']
@@ -84,7 +83,6 @@ def consolidate_order_book(response, order_book, order_book_ob):
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
 
-# @app.task
 def get_order_book_snapshot(symbol):
     # print('Get order book for:', symbol)
     data = Binance.get_order_book(symbol, 9999)
@@ -123,6 +121,8 @@ def get_order_book_snapshot(symbol):
 def apply_cached_response(symbol):
     cache_applied = False
 
+    if redis.hget('last_sequences', symbol):
+        return
     for response in redis.lrange('cached_responses:'+symbol, 0, -1):
         response = json.loads(response)
         if not has_order_book_initialized(response):
@@ -167,23 +167,70 @@ def is_subsequent_response(response):
 # last_sequences = manager.dict()
 # cached_responses = manager.dict()
 
-if __name__ == '__main__':
-    import threading
-    import asyncio
+import pdb
 
-    from binance import websocket_pool
+import asyncio
+
+async def main():
+    while True:
+        if (symbols := redis.rpop('pending_symbols', 10)):
+            tasks = []
+            for symbol in symbols:
+                print(symbol)
+                tasks.append(asyncio.create_task(get_order_book_snapshot(symbol)))
+                # pool.apply_async(get_order_book_snapshot, (symbol, ))
+            
+            asyncio.gather(*tasks)
+
+
+def handle_response():
+    while True:
+        if not (response := redis.rpop('responses', 10)):
+            continue
         
-    threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
+        # if responses.empty():
+        #     continue
+        # response = responses.get()
+        if response:
+            print(response)
+            for _response in response:
+                response = json.loads(_response)
+                update_order_book(response)
+                # pool.apply(update_order_book, (response, ))
+            # symbol = response['s']
+                print(redis.llen('responses'))
+            # print(symbol, Binance.get_order_book(symbol))
 
-    response = {
-        "e":"depthUpdate",
-        "E":1635587664771,
-        "s":"BNBETH",
-        "U":1024042672,
-        "u":1024042672,
-        "b":[],
-        "a":[
-            ["0.12210000","213.67300000"]
-        ]
-    }
-    update_order_book(response)
+
+if __name__ == '__main__':
+
+    from multiprocessing import Pool, Process
+    # pool = Pool(4)
+
+
+    for _ in range(4):
+        Process(target=handle_response).start()
+
+
+    asyncio.run(main())
+
+
+    # import threading
+    # import asyncio
+
+    # from binance import websocket_pool
+        
+    # threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
+
+    # response = {
+    #     "e":"depthUpdate",
+    #     "E":1635587664771,
+    #     "s":"BNBETH",
+    #     "U":1024042672,
+    #     "u":1024042672,
+    #     "b":[],
+    #     "a":[
+    #         ["0.12210000","213.67300000"]
+    #     ]
+    # }
+    # update_order_book(response)
