@@ -6,6 +6,7 @@ from celery.utils.log import get_task_logger
 
 from exchanges.binance import get_client
 
+
 logger = get_task_logger(__name__)
 
 app = Celery('hello', broker='redis://localhost:6379/1', backend='redis://localhost:6379/2')

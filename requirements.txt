@@ -5,3 +5,13 @@ matplotlib
 ccxt
 python-dotenv
 celery
+simplejson
+redis
+websocket-client
+urllib3
+hiredis
+
+# dev
+pytest
+
+# TODO: separate dev, testing, prod envs
