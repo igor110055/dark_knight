@@ -1,4 +1,5 @@
 import asyncio
+from time import time
 from random import randint
 from typing import List
 
@@ -11,7 +12,7 @@ redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
-async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis) -> None:
+async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis, cooldown=5) -> None:
     """Stream symbols update from websocket, and cache into redis
 
     Args:
@@ -21,25 +22,38 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
         timeout (int, optional): ping timeout. Defaults to 60*15.
         redis (FRedis, optional): redis client. Defaults to redis.
     """
-    params = [f'{symbol.lower()}@depth@100ms' for symbol in symbols]
+    # params = [f'{symbol.lower()}@depth@100ms' for symbol in symbols]
 
-    payload = {
-        "method": "SUBSCRIBE",
-        'params': params,
-        "id": stream_id
-    }
+    # payload = {
+    #     "method": "SUBSCRIBE",
+    #     'params': params,
+    #     "id": stream_id
+    # }
 
     # auto reconnect
     async for websocket in websockets.connect(url, ping_timeout=timeout):
-        await websocket.send(json.dumps(payload))
+        for symbol in symbols:
+            start = time()
+            payload = {
+                "method": "SUBSCRIBE",
+                'params': [f'{symbol.lower()}@depth@100ms'],
+                "id": stream_id
+            }
+            await websocket.send(json.dumps(payload))
 
-        # ack
-        message = await websocket.recv()
+            # ack
+            # message = await websocket.recv()
+
+            while time() - start < cooldown:
+                message = await websocket.recv()
+                if 'result' in message:
+                    continue
+                logger.info(f'websocket update received on {message[19:52]} ...')
+                redis.lpush('responses', message)
 
         async for message in websocket:
-            # while True:
-            #     message = await websocket.recv()
-
+            if 'result' in message:
+                continue
             logger.info(f'websocket update received on {message[19:52]} ...')
             redis.lpush('responses', message)
 

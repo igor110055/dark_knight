@@ -24,10 +24,10 @@ def update_order_book(response: dict, redis=redis, from_cache=False, last_sequen
     end_sequence = response['u']
 
     if not redis.hget('initialized', symbol) and not from_cache:
-        # TODO: too slow, need to separate response receive and handling
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
+
         loop = asyncio.get_event_loop()
-        # TODO: move to process
+        loop.create_task(asyncio.sleep(1))
         return loop.run_in_executor(POOL, get_order_book_snapshot, symbol)
 
     logger.info(
@@ -104,7 +104,7 @@ def get_order_book_snapshot(symbol):
     if redis.hget('initialized', symbol):
         return
 
-    if not (last_update_id := data.pop('lastUpdateId')):
+    if not (last_update_id := data.pop('lastUpdateId', None)):
         return
 
     # now = int(time() * 1000)
