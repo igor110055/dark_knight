@@ -17,13 +17,13 @@ POOL = ProcessPoolExecutor(4)
 # POOL = None
 
 
-def update_order_book(response: dict, redis=redis, from_cache=False):
+def update_order_book(response: dict, redis=redis, from_cache=False, last_sequence=None):
     symbol = response['s']
     epoch = response['E']  # TODO: add to price
     start_sequence = response['U']
     end_sequence = response['u']
 
-    if not redis.hget('initialized', symbol):
+    if not redis.hget('initialized', symbol) and not from_cache:
         # TODO: too slow, need to separate response receive and handling
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
         loop = asyncio.get_event_loop()
@@ -32,12 +32,13 @@ def update_order_book(response: dict, redis=redis, from_cache=False):
 
     logger.info(
         f"{symbol} update: start sequence {start_sequence}, last sequence {redis.hget('last_sequences', symbol)}")
-    if start_sequence != int(redis.hget('last_sequences', symbol)) + 1:
+
+    last_sequence = last_sequence or int(redis.hget('last_sequences', symbol))
+    if start_sequence != last_sequence + 1:
         if not from_cache:
             logger.warning(
                 f"{symbol} reset: {start_sequence}, {redis.hget('last_sequences', symbol)}")
             redis.hdel('initialized', symbol)
-            redis.hdel('last_update_ids', symbol)
             redis.hdel('last_sequences', symbol)
             redis.rpush('cached_responses:'+symbol, json.dumps(response))
         return
@@ -86,11 +87,6 @@ def consolidate_order_book(response, order_book, order_book_ob):
             logger.warning(
                 f"{symbol} bid ask cross! best bid {best_bid}, best ask {best_ask}")
             redis.hdel('initialized', symbol)
-            # last_update_ids[symbol] = None
-            # order_book_ob.best_prices = {'bids': 0, 'asks': 0}
-            # order_book_ob.clear()
-            # cached_responses.setdefault(symbol, []).append(response)
-            # get_order_book_snapshot(symbol)
 
         else:
             best_prices = order_book_ob.best_prices
@@ -111,30 +107,26 @@ def get_order_book_snapshot(symbol):
     if not (last_update_id := data.pop('lastUpdateId')):
         return
 
-    redis.hset('last_update_ids', symbol, last_update_id)
-
-    order_book_ob = OrderBook.get(symbol)
-    order_book_ob.clear()
-    order_book = order_book_ob.get_book()
-
-    for price, amount in data['bids']:
-        order_book['bids'][float(price)] = amount
-
-    for price, amount in data['asks']:
-        order_book['asks'][float(price)] = amount
-
-    order_book_ob.save(order_book)
-
     # now = int(time() * 1000)
 
     # bids = {float(price): [size, now] for price, size in data['bids']}
     # asks = {float(price): [size, now] for price, size in data['asks']}
 
-    return apply_cached_response(symbol)
+    if apply_cached_response(symbol, last_update_id):
+        order_book_ob = OrderBook.get(symbol)
+        order_book_ob.clear()
+        order_book = order_book_ob.get_book()
+
+        for price, amount in data['bids']:
+            order_book['bids'][float(price)] = amount
+
+        for price, amount in data['asks']:
+            order_book['asks'][float(price)] = amount
+
+        order_book_ob.save(order_book)
 
 
-def apply_cached_response(symbol, count=50):
-    # TODO: compare rpop, lrange and stream performance
+def apply_cached_response(symbol, last_update_id):
     if not (responses := redis.lrange('cached_responses:'+symbol, 0, -1)):
         return
 
@@ -144,55 +136,47 @@ def apply_cached_response(symbol, count=50):
         for response in responses:
             response = json.loads(response)
 
-            if response['u'] <= int(redis.hget('last_update_ids', symbol)):
+            last_sequence = response['u']
+            if last_sequence <= last_update_id:
                 continue
 
             if not redis.hget('initialized', symbol):
-                if has_order_book_initialized(response):
-                    redis.hset('initialized', symbol, 1)
-                    redis.hset('last_sequences', symbol, response['u'])
-                    logger.info(f"Initialized {symbol}")
+                if not has_order_book_initialized(response, last_update_id):
+                    continue
 
-                    # special handling for the first valid response
-                    update_order_book(response, from_cache=True)
-                    redis.hset('last_sequences', symbol, response['u'])
+                logger.info(f"Initialized {symbol}")
+                redis.hset('initialized', symbol, 1)
 
-                continue
-
-            if not is_subsequent_response(response):
+            elif not is_subsequent_response(response, last_sequence):
                 logger.info(f'Uninitialized {symbol}')
                 redis.hdel('initialized', symbol)  # reset initialized status
-                return
+                return False
 
-            update_order_book(response, from_cache=True)
-            redis.hset('last_sequences', symbol, response['u'])
+            update_order_book(response, from_cache=True,
+                              last_sequence=last_sequence)
+            redis.hset('last_sequences', symbol, last_sequence)
 
     redis.delete('cached_responses:'+symbol)  # remove stale responses
     logger.info(f'Release the lock for {symbol}')
+    return True
 
 
-def has_order_book_initialized(response):
+def has_order_book_initialized(response, last_update_id):
     if response is None:
         return False
     symbol = response['s']
     start_sequence = response['U']
     end_sequence = response['u']
 
-    if not (last_update_id := redis.hget('last_update_ids', symbol)):
-        return False
-
     logger.info(
         f"Initialized check: {symbol} {start_sequence}, {last_update_id}, {end_sequence}")
     return start_sequence <= int(last_update_id) + 1 <= end_sequence
 
 
-def is_subsequent_response(response):
+def is_subsequent_response(response, last_sequence):
     symbol = response['s']
     start_sequence = response['U']
-    # end_sequence = response['u']
 
-    if not (last_sequence := redis.hget('last_sequences', symbol)):
-        return False
     if not (start_sequence == int(last_sequence) + 1):
         logger.info(
             f"Subsequent response: {symbol}, {start_sequence}, {int(last_sequence) + 1}")
