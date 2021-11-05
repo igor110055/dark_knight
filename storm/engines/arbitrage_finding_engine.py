@@ -1,6 +1,9 @@
 import asyncio
-from ..tasks.order_task import check_arbitrage
+from concurrent.futures import ProcessPoolExecutor
+
 from ..clients.redis_client import get_client
+from ..tasks.order_task import check_arbitrage
+
 
 def trading(symbol):
     if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
@@ -16,12 +19,15 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     redis_client = get_client()
 
-    POOL = None
+    POOL = ProcessPoolExecutor(2)
+    # POOL = None
 
     try:
         while True:
-            for best_order_key in redis_client.scan_iter('best_orders:*'):
-                symbol = best_order_key[12:]
+            if not (updated_symbols := redis_client.hgetall('updated_best_prices')):
+                continue
+            for symbol in updated_symbols:
+                redis_client.hdel('updated_best_prices', symbol)
                 loop.run_in_executor(POOL, trading, symbol)
     except KeyboardInterrupt:
         loop.close()

@@ -83,8 +83,10 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     best_prices_right = right_order_book.best_prices
 
     # TODO: move left_assets, right_assets to global dict
-    synthetic_ask = calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets)
-    synthetic_bid = calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, right_assets)
+    synthetic_ask = calculate_synthetic_ask(
+        best_prices_left, left_assets, best_prices_right, right_assets)
+    synthetic_bid = calculate_synthetic_bid(
+        best_prices_left, left_assets, best_prices_right, right_assets)
 
     # FIXME: necessary check?
     if not synthetic_bid or not synthetic_ask:
@@ -97,8 +99,10 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
 
     # TODO: use redis lock like symbol_lock
 
-    buy_synthetic_sell_natural_return_perc = (natural_bid - synthetic_ask) / synthetic_ask * 100
-    logger.info(f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
+    buy_synthetic_sell_natural_return_perc = (
+        natural_bid - synthetic_ask) / synthetic_ask * 100
+    logger.info(
+        f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
     if buy_synthetic_sell_natural_return_perc > target_perc:
         with open('arbitrage', 'a') as file:
             file.write(f'{datetime.now()} - [Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}\n')
@@ -120,11 +124,13 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
         #         trade_count += 1
         #         sleep(3)
 
-    buy_natural_sell_synthetic_return_perc = (synthetic_bid - natural_ask) / natural_ask * 100
-    logger.info(f'[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_natural_sell_synthetic_return_perc}')
+    buy_natural_sell_synthetic_return_perc = (
+        synthetic_bid - natural_ask) / natural_ask * 100
+    logger.info(
+        f'[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}')
     if buy_natural_sell_synthetic_return_perc > target_perc:
         with open('arbitrage', 'a') as file:
-            file.write(f'{datetime.now()} - [Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}\n')
+            file.write(f'{datetime.now()} - [Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}\n')
 
     # pprint(
     #     sorted(order_book['bids'].items(),

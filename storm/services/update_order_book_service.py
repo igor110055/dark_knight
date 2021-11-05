@@ -1,11 +1,12 @@
 import asyncio
+from concurrent.futures import ProcessPoolExecutor
 
 import simplejson as json
+
 from ..clients.redis_client import get_client
 from ..exchanges.binance import get_client as get_binance_client
 from ..models.order_book import OrderBook
 from ..utils import get_logger, symbol_lock
-from concurrent.futures import ProcessPoolExecutor
 
 redis = get_client(a_sync=False)
 binance = get_binance_client()
@@ -14,6 +15,7 @@ logger = get_logger(__file__)
 
 POOL = ProcessPoolExecutor(4)
 # POOL = None
+
 
 def update_order_book(response: dict, redis=redis, from_cache=False):
     symbol = response['s']
@@ -25,6 +27,7 @@ def update_order_book(response: dict, redis=redis, from_cache=False):
         # TODO: too slow, need to separate response receive and handling
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
         loop = asyncio.get_event_loop()
+        # TODO: move to process
         return loop.run_in_executor(POOL, get_order_book_snapshot, symbol)
 
     logger.info(
@@ -80,7 +83,8 @@ def consolidate_order_book(response, order_book, order_book_ob):
         best_ask = min(order_book['asks'])
 
         if best_bid > best_ask:
-            logger.warning(f"{symbol} bid ask cross! best bid {best_bid}, best ask {best_ask}")
+            logger.warning(
+                f"{symbol} bid ask cross! best bid {best_bid}, best ask {best_ask}")
             redis.hdel('initialized', symbol)
             # last_update_ids[symbol] = None
             # order_book_ob.best_prices = {'bids': 0, 'asks': 0}
@@ -89,7 +93,13 @@ def consolidate_order_book(response, order_book, order_book_ob):
             # get_order_book_snapshot(symbol)
 
         else:
-            logger.info(f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
+            best_prices = order_book_ob.best_prices
+            if best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
+                return
+
+            redis.hset('updated_best_prices', symbol, 1)
+            logger.info(
+                f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
 
@@ -171,7 +181,8 @@ def has_order_book_initialized(response):
     if not (last_update_id := redis.hget('last_update_ids', symbol)):
         return False
 
-    logger.info(f"Initialized check: {symbol} {start_sequence}, {last_update_id}, {end_sequence}")
+    logger.info(
+        f"Initialized check: {symbol} {start_sequence}, {last_update_id}, {end_sequence}")
     return start_sequence <= int(last_update_id) + 1 <= end_sequence
 
 
