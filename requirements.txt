@@ -10,6 +10,7 @@ redis
 websocket-client
 urllib3
 hiredis
+aioredis
 
 # dev
 pytest

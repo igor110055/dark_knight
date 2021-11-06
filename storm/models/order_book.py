@@ -1,3 +1,5 @@
+import simplejson as json
+
 from ..clients.redis_client import get_client
 
 
@@ -49,7 +51,8 @@ class OrderBook:
         if not (bids_prices := self.redis.hkeys(self.bids_key)):
             return []
 
-        bids_prices = sorted([float(price) for price in bids_prices], reverse=True)
+        bids_prices = sorted([float(price)
+                             for price in bids_prices], reverse=True)
 
         if top is not None:
             bids_prices = bids_prices[:top]
@@ -80,13 +83,11 @@ class OrderBook:
     # Important: for arbitrage
     @property
     def best_prices(self):
-        bids = self.redis.hget(f"best_orders:{self.symbol}", "bids") or 0
-        asks = self.redis.hget(f"best_orders:{self.symbol}", "asks") or 0
-        return dict(bids=float(bids), asks=float(asks))
+        prices = self.redis.hget('best_orders', self.symbol)
+        if not prices:
+            return None
+        return json.loads(prices)
 
     @best_prices.setter
     def best_prices(self, best_prices):
-        self.redis.hset(f"best_orders:{self.symbol}",
-                        "asks", best_prices['asks'])
-        self.redis.hset(f"best_orders:{self.symbol}",
-                        "bids", best_prices['bids'])
+        self.redis.hset('best_orders', self.symbol, json.dumps(best_prices))

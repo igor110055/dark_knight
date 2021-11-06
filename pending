@@ -1,11 +1,11 @@
-1. make singleton binance client
-2. check redis failed trade
-
-3. gradually load order book, one by one
-4. TTL on everything in redis to ensure no obsolete data, re populate if needed
-5. clear redis cache on initialisation
-
-6. websocket pooling ws4py
-7. separate get order book & update order book into 2 queues
-
-8. manually select arbitrage pairs
+1. make singleton binance client ✅
+2. check redis failed trade ✅
+3. gradually load order book, one by one ✅
+4. TTL on everything in redis to ensure no obsolete data, re populate if needed 
+5. clear redis cache on initialisation ✅
+6. websocket pooling ws4py ✅
+7. separate get order book & update order book into 2 queues ✅
+8. manually select arbitrage pairs ✅
+9. redis pipeline
+10. k8s
+11 zeromq load balancing

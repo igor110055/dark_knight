@@ -5,19 +5,23 @@ from ..exchanges.binance import WS_URL
 from ..services.stream_symbol_service import stream_symbols
 from ..services.update_order_book_service import handle_response
 
-
 if __name__ == '__main__':
     redis = get_client(a_sync=False)
-    redis.delete('last_update_ids', 'last_sequences',
-                 'cached_responses', 'initialized')
+    redis.delete('last_sequences', 'cached_responses', 'initialized')
+
+    LUNA = set(['LUNAUSDT', 'BNBUSDT', 'LUNABNB'])
+    MATIC = set(['MATICUSDT', 'MATICBNB', 'BNBUSDT'])
+    SAND = set(['SANDUSDT', 'BNBUSDT', 'SANDBNB'])
 
     loop = asyncio.get_event_loop()
-    stream_task = loop.create_task(stream_symbols(
-        WS_URL, ['ETHUSDT', 'LUNAUSDT', 'BTCUSDT', 'DOTUSDT', 'BNBUSDT', 'LUNABNB']))
-    handle_response_task = loop.create_task(handle_response())
+    task = loop.create_task(stream_symbols(WS_URL, LUNA | MATIC | SAND))
+    # maticusdt_task = loop.create_task(stream_symbols(
+    #     WS_URL, ['MATICUSDT', 'MATICBNB', 'USDTTRY', 'MATICTRY']))
+    # handle_response_task = loop.create_task(handle_response())
 
     try:
-        loop.run_forever()
+        loop.run_until_complete(handle_response())
     except KeyboardInterrupt:
-        stream_task.cancel()
-        handle_response_task.cancel()
+        task.cancel()
+        # maticusdt_task.cancel()
+        # handle_response_task.cancel()

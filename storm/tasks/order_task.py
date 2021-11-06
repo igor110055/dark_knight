@@ -1,21 +1,22 @@
+import csv
 from datetime import datetime
 from decimal import Decimal
 
 from ..helpers.symbol_finder import load_symbols
 from ..models.order_book import OrderBook
-from ..utils import get_logger
-
-logger = get_logger(__file__)
+from ..utils import get_logger, logging
 
 
-load_symbols('symbols.csv')
+file_handler = logging.FileHandler('arbitrage.log')
+logger = get_logger(__file__, std=False)
+logger.addHandler(file_handler)
+
+# load_symbols('symbols.csv')
 
 # TODO: refactor two calculate price functions
 
 
 def calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets):
-    # best_prices_left = json.loads(
-    #     redis.hget('best_prices', left_curr).decode())
     if left_assets['normal']:
         left_synthetic_ask = best_prices_left['asks']
     else:
@@ -26,7 +27,6 @@ def calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, ri
         # left_synthetic_ask_size = 1 / best_prices_left['bid'][1][0]
         # left_synthetic_ask_epoch = best_prices_left['bid'][1][1]
 
-    # best_prices_right = json.loads(redis.hget('best_prices', right_curr))
     if right_assets['normal']:
         right_synthetic_ask = best_prices_right['asks']
     else:
@@ -72,23 +72,19 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
     order_book = OrderBook.get(natural_symbol)
-    best_prices_natural = order_book.best_prices
-    # best_prices_natural = json.loads(redis.hget('best_prices', natural))
+    if not (best_prices_natural := order_book.best_prices):
+        return
 
-    # if not best_prices_natural:
-    #     return
     natural_bid = best_prices_natural['bids']
     natural_ask = best_prices_natural['asks']
 
-    # TODO: need?
-    # if not all(curr in best_prices for curr in [natural, left_curr, right_curr]):
-    #     return
-
     left_order_book = OrderBook.get(left_curr)
-    best_prices_left = left_order_book.best_prices
+    if not (best_prices_left := left_order_book.best_prices):
+        return
 
     right_order_book = OrderBook.get(right_curr)
-    best_prices_right = right_order_book.best_prices
+    if not (best_prices_right := right_order_book.best_prices):
+        return
 
     # TODO: move left_assets, right_assets to global dict
     synthetic_ask = calculate_synthetic_ask(
@@ -96,7 +92,7 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     synthetic_bid = calculate_synthetic_bid(
         best_prices_left, left_assets, best_prices_right, right_assets)
 
-    # print(synthetic_bid, synthetic_ask)
+    # FIXME: necessary check?
     if not synthetic_bid or not synthetic_ask:
         return
 
@@ -105,16 +101,30 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
 
     # TODO: add available size
 
-    # TODO: add order under execution lock
-    # if redis.get('TRADING') == 'true':
-    #     return
+    # TODO: use redis lock like symbol_lock
 
-    diff_perc = (natural_bid - synthetic_ask) / synthetic_ask * 100
-    logger.info(f'Natural: {natural_symbol}, synthetic: {synthetic}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {diff_perc}')
-    if diff_perc > target_perc:
-        print(datetime.now(), diff_perc)
-        print(f"{natural_symbol}, {synthetic}: 'buy synthetic, sell natural', {natural_bid}, {synthetic_ask}, {diff_perc}")
+    buy_synthetic_sell_natural_return_perc = (
+        natural_bid - synthetic_ask) / synthetic_ask * 100
+    logger.info(
+        f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
+    if buy_synthetic_sell_natural_return_perc > target_perc:
+        data = {
+            'time': datetime.utcnow(),
+            'strategy': 'buy_synthetic_sell_natural',
+            'natural': natural_symbol,
+            'synthetic_left': left_curr,
+            'synthetic_right': right_curr,
+            'natural_bid': best_prices_natural['bids'],
+            'natural_ask': best_prices_natural['asks'],
+            'synthetic_left_bid': best_prices_left['bids'],
+            'synthetic_left_ask': best_prices_left['asks'],
+            'synthetic_right_bid': best_prices_right['bids'],
+            'synthetic_right_ask': best_prices_right['asks'],
+            'expected_return_perc': buy_synthetic_sell_natural_return_perc
+        }
+        write_csv(data)
 
+        # FIXME: order execution
         # if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
         #     print('found')
         # redis.set('TRADING', 'true', 1)
@@ -131,10 +141,26 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
         #         trade_count += 1
         #         sleep(3)
 
-    # if (diff_perc := (synthetic_bid - natural_ask) / natural_ask * 100) > target_perc and diff_perc < upper_bound:
-    #     print(natural, synthetic, 'buy natural, sell synthetic',
-    #           synthetic_bid, natural_ask, diff_perc)
-
+    buy_natural_sell_synthetic_return_perc = (
+        synthetic_bid - natural_ask) / natural_ask * 100
+    logger.info(
+        f'[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}')
+    if buy_natural_sell_synthetic_return_perc > target_perc:
+        data = {
+            'time':datetime.utcnow(),
+            'strategy': 'buy_natural_sell_synthetic',
+            'natural': natural_symbol,
+            'synthetic_left': left_curr,
+            'synthetic_right': right_curr,
+            'natural_bid': best_prices_natural['bids'],
+            'natural_ask': best_prices_natural['asks'],
+            'synthetic_left_bid': best_prices_left['bids'],
+            'synthetic_left_ask': best_prices_left['asks'],
+            'synthetic_right_bid': best_prices_right['bids'],
+            'synthetic_right_ask': best_prices_right['asks'],
+            'expected_return_perc': buy_natural_sell_synthetic_return_perc
+        }
+        write_csv(data)
     # pprint(
     #     sorted(order_book['bids'].items(),
     #            key=lambda item: item[0],
@@ -142,3 +168,8 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     # print(order_book['asks'][:10])
     # update last_update_id
     # check start_sequence increment
+
+def write_csv(data, filename='arbitrage.csv'):
+    with open(filename, 'a') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=['time', 'strategy', 'natural', 'synthetic_left', 'synthetic_right', 'natural_bid', 'natural_ask', 'synthetic_left_bid', 'synthetic_left_ask', 'synthetic_right_bid', 'synthetic_right_ask', 'expected_return_perc'])
+        writer.writerow(data)
