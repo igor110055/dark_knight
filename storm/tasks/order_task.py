@@ -1,14 +1,17 @@
+import csv
 from datetime import datetime
 from decimal import Decimal
 
 from ..helpers.symbol_finder import load_symbols
 from ..models.order_book import OrderBook
-from ..utils import get_logger
-
-logger = get_logger(__file__)
+from ..utils import get_logger, logging
 
 
-load_symbols('symbols.csv')
+file_handler = logging.FileHandler('arbitrage.log')
+logger = get_logger(__file__, std=False)
+logger.addHandler(file_handler)
+
+# load_symbols('symbols.csv')
 
 # TODO: refactor two calculate price functions
 
@@ -69,18 +72,19 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
     order_book = OrderBook.get(natural_symbol)
-    best_prices_natural = order_book.best_prices
+    if not (best_prices_natural := order_book.best_prices):
+        return
 
-    # if not best_prices_natural:
-    #     return
     natural_bid = best_prices_natural['bids']
     natural_ask = best_prices_natural['asks']
 
     left_order_book = OrderBook.get(left_curr)
-    best_prices_left = left_order_book.best_prices
+    if not (best_prices_left := left_order_book.best_prices):
+        return
 
     right_order_book = OrderBook.get(right_curr)
-    best_prices_right = right_order_book.best_prices
+    if not (best_prices_right := right_order_book.best_prices):
+        return
 
     # TODO: move left_assets, right_assets to global dict
     synthetic_ask = calculate_synthetic_ask(
@@ -104,8 +108,21 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     logger.info(
         f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
     if buy_synthetic_sell_natural_return_perc > target_perc:
-        with open('arbitrage', 'a') as file:
-            file.write(f'{datetime.now()} - [Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}\n')
+        data = {
+            'time': datetime.utcnow(),
+            'strategy': 'buy_synthetic_sell_natural',
+            'natural': natural_symbol,
+            'synthetic_left': left_curr,
+            'synthetic_right': right_curr,
+            'natural_bid': best_prices_natural['bids'],
+            'natural_ask': best_prices_natural['asks'],
+            'synthetic_left_bid': best_prices_left['bids'],
+            'synthetic_left_ask': best_prices_left['asks'],
+            'synthetic_right_bid': best_prices_right['bids'],
+            'synthetic_right_ask': best_prices_right['asks'],
+            'expected_return_perc': buy_synthetic_sell_natural_return_perc
+        }
+        write_csv(data)
 
         # FIXME: order execution
         # if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
@@ -129,9 +146,21 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     logger.info(
         f'[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}')
     if buy_natural_sell_synthetic_return_perc > target_perc:
-        with open('arbitrage', 'a') as file:
-            file.write(f'{datetime.now()} - [Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}\n')
-
+        data = {
+            'time':datetime.utcnow(),
+            'strategy': 'buy_natural_sell_synthetic',
+            'natural': natural_symbol,
+            'synthetic_left': left_curr,
+            'synthetic_right': right_curr,
+            'natural_bid': best_prices_natural['bids'],
+            'natural_ask': best_prices_natural['asks'],
+            'synthetic_left_bid': best_prices_left['bids'],
+            'synthetic_left_ask': best_prices_left['asks'],
+            'synthetic_right_bid': best_prices_right['bids'],
+            'synthetic_right_ask': best_prices_right['asks'],
+            'expected_return_perc': buy_natural_sell_synthetic_return_perc
+        }
+        write_csv(data)
     # pprint(
     #     sorted(order_book['bids'].items(),
     #            key=lambda item: item[0],
@@ -139,3 +168,8 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     # print(order_book['asks'][:10])
     # update last_update_id
     # check start_sequence increment
+
+def write_csv(data, filename='arbitrage.csv'):
+    with open(filename, 'a') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=['time', 'strategy', 'natural', 'synthetic_left', 'synthetic_right', 'natural_bid', 'natural_ask', 'synthetic_left_bid', 'synthetic_left_ask', 'synthetic_right_bid', 'synthetic_right_ask', 'expected_return_perc'])
+        writer.writerow(data)
