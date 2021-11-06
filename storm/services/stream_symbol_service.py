@@ -12,7 +12,7 @@ redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
-async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis, cooldown=5) -> None:
+async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis) -> None:
     """Stream symbols update from websocket, and cache into redis
 
     Args:
@@ -33,7 +33,6 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
     # auto reconnect
     async for websocket in websockets.connect(url, ping_timeout=timeout):
         for symbol in symbols:
-            start = time()
             payload = {
                 "method": "SUBSCRIBE",
                 'params': [f'{symbol.lower()}@depth@100ms'],
@@ -44,7 +43,7 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
             # ack
             # message = await websocket.recv()
 
-            while time() - start < cooldown:
+            while not redis.hget('initialized', symbol):
                 message = await websocket.recv()
                 if 'result' in message:
                     continue
