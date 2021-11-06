@@ -13,7 +13,38 @@ def trading(symbol):
             'BNBUSDT': {'normal': True}
         }
         check_arbitrage(symbol, synthetic, 0)
+    
+    if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
+        symbol = 'LUNAUSDT'
+        synthetic = {
+            'EURUSDT': {'normal': True},
+            'LUNAEUR': {'normal': True}
+        }
+        check_arbitrage(symbol, synthetic, 0)
 
+    if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
+        symbol = 'MATICUSDT'
+        synthetic = {
+            'MATICBNB': {'normal': True},
+            'BNBUSDT': {'normal': True}
+        }
+        check_arbitrage(symbol, synthetic, 0)
+
+    # if symbol in ['MATICUSDT', 'MATICTRY', 'USDTTRY']:
+    #     symbol = 'MATICUSDT'
+    #     synthetic = {
+    #         'MATICTRY': {'normal': True},
+    #         'USDTTRY': {'normal': False}
+    #     }
+    #     check_arbitrage(symbol, synthetic, 0)
+
+    if symbol in ['SANDUSDT', 'BNBUSDT', 'SANDBNB']:
+        symbol = 'SANDUSDT'
+        synthetic = {
+            'BNBUSDT': {'normal': True},
+            'SANDBNB': {'normal': True}
+        }
+        check_arbitrage(symbol, synthetic, 0)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
