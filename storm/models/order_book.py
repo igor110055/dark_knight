@@ -85,7 +85,7 @@ class OrderBook:
     def best_prices(self):
         prices = self.redis.hget('best_orders', self.symbol)
         if not prices:
-            return {'bids': 0, 'asks': 0}
+            return None
         return json.loads(prices)
 
     @best_prices.setter

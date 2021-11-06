@@ -1,5 +1,5 @@
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import simplejson as json
 import zmq
@@ -12,7 +12,9 @@ from ..utils import get_logger, symbol_lock
 redis = get_client(a_sync=False)
 binance = get_binance_client()
 logger = get_logger(__file__)
-
+loop = asyncio.get_event_loop()
+SLOW_POOL = None
+FAST_POOL = None
 
 # TODO: check passing string or retrieve from redis faster
 def update_order_book(message: str, from_cache=False, last_sequence=None, redis=redis):
@@ -26,7 +28,8 @@ def update_order_book(message: str, from_cache=False, last_sequence=None, redis=
     if not redis.hget('initialized', symbol) and not from_cache:
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
 
-        return get_order_book_snapshot(symbol)
+        return loop.run_in_executor(SLOW_POOL, get_order_book_snapshot, symbol)
+        # return get_order_book_snapshot(symbol)
 
     logger.info(
         f"{symbol} update: start sequence {start_sequence}, last sequence {redis.hget('last_sequences', symbol)}")
@@ -150,9 +153,7 @@ def apply_cached_response(symbol, last_update_id):
                 redis.hdel('initialized', symbol)  # reset initialized status
                 return False
 
-            # loop = asyncio.get_event_loop()
-            loop.run_in_executor(None, update_order_book,
-                                 raw_response, True, last_sequence)
+            loop.run_in_executor(SLOW_POOL, update_order_book, raw_response, True, last_sequence)
             # update_order_book(raw_response, from_cache=True, last_sequence=last_sequence)
             redis.hset('last_sequences', symbol, last_sequence)
 
@@ -190,11 +191,12 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
 
-    POOL = ProcessPoolExecutor(8)
+    FAST_POOL = ProcessPoolExecutor(16)
+    SLOW_POOL = ThreadPoolExecutor(16)
 
     logger.info('Ready to handle order book update')
     while True:
         message = socket.recv_string()
-        loop.run_in_executor(POOL, update_order_book, message)
+        loop.run_in_executor(FAST_POOL, update_order_book, message)
 
         socket.send(b'')

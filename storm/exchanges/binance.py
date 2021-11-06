@@ -31,7 +31,7 @@ REST_URL = 'https://api.binance.com'
 WS_URL = "wss://stream.binance.com:9443/ws"
 
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=500, pool_maxsize=500)
+adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=100)
 session.mount(REST_URL, adapter)
 
 headers = {'X-MBX-APIKEY': api_key}
@@ -120,7 +120,7 @@ class Binance:
         request_uuid = uuid4()
         logger.info(f'[{request_uuid}] GET order book request for {symbol}')
         resp = self.get(f"api/v3/depth?symbol={symbol}", raw=True)
-        logger.info(f'[{request_uuid}] GET order book response for {symbol}: {resp.content.decode()[:20]}')
+        logger.info(f'[{request_uuid}] GET order book response for {symbol}: {resp.content.decode()[:40]}')
         return resp.json()
 
     def load_markets(self):
