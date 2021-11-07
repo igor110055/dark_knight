@@ -13,6 +13,7 @@ redis = get_client(a_sync=False)
 binance = get_binance_client()
 logger = get_logger(__file__)
 loop = asyncio.get_event_loop()
+
 SLOW_POOL = None
 FAST_POOL = None
 
@@ -28,9 +29,10 @@ def update_order_book(message: str, from_cache=False, last_sequence=None, redis=
     if not redis.hget('initialized', symbol) and not from_cache:
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
 
+        get_order_book_snapshot(symbol)
         if redis.setnx('getting_snapshot:'+symbol, 30):
-            binance.stream_symbol(symbol)
-            loop.run_in_executor(SLOW_POOL, get_order_book_snapshot, symbol)
+            get_order_book_snapshot(symbol)
+            # loop.run_in_executor(SLOW_POOL, get_order_book_snapshot, symbol)
             redis.delete('getting_snapshot:'+symbol)
         return 
         # return get_order_book_snapshot(symbol)
@@ -95,7 +97,7 @@ def consolidate_order_book(response, order_book, order_book_ob):
 
         else:
             best_prices = order_book_ob.best_prices
-            if best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
+            if best_prices and best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
                 return
 
             redis.hset('updated_best_prices', symbol, 1)
@@ -103,10 +105,13 @@ def consolidate_order_book(response, order_book, order_book_ob):
                 f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
             order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
 
-
+import pdb
 def get_order_book_snapshot(symbol):
     # data = binance.get_order_book(symbol)
-    data = binance.websocket.snapshot[0]
+
+    # pdb.set_trace()
+    order_book_socket.send_json({'type': 'retrieve_order_book'})
+    data = json.loads(order_book_socket.recv_json())
     if redis.hget('initialized', symbol):
         return
 
@@ -196,12 +201,39 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
 
-    FAST_POOL = ProcessPoolExecutor(16)
+    # FAST_POOL = ProcessPoolExecutor(16)
+    FAST_POOL = ThreadPoolExecutor(8)
     SLOW_POOL = ThreadPoolExecutor(16)
+
+    # import pdb; pdb.set_trace()
+    order_book_socket = context.socket(zmq.REQ)
+    order_book_socket.connect('tcp://127.0.0.1:5556')
+
+    # import time
+    # for symbol in ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'LUNAUSDT']:
+    #     order_book_socket.send_json({'type': 'update_symbol', 'symbol': symbol})
+    #     message = order_book_socket.recv_string()
+    #     logger.info(message)
+
+    #     for _ in range(100):
+
+    #         order_book_socket.send_json({'type': 'retrieve_order_book'})
+    #         message = order_book_socket.recv_string()
+    #         logger.info(message)
+
+            # order_book_socket.send_json({'type': 'get_order_book', 'symbol': symbol})
+            # message = order_book_socket.recv_string()
+            # logger.info(message)
+
+        # time.sleep(0.4)
+        
 
     logger.info('Ready to handle order book update')
     while True:
         message = socket.recv_string()
+        # update_order_book(message)
+
+        # TODO: fix zmq connection in process
         loop.run_in_executor(FAST_POOL, update_order_book, message)
 
-        socket.send(b'')
+        socket.send_string('')

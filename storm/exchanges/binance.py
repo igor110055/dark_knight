@@ -78,7 +78,7 @@ class Binance:
             Binance.SYMBOLS = load_symbols()
 
     def stream_symbol(self, symbol):
-        self.websocket = self.websocket or get_binance_websocket()
+        self.websocket = get_binance_websocket()
         self.websocket.symbol = symbol
 
         self.websocket_thread = Thread(target=self.websocket.run_forever, kwargs={'ping_interval': 60, 'ping_timeout' : 30})
@@ -113,15 +113,7 @@ class Binance:
                     for balance in data['balances'] if self.__is_larger_than_zero(balance['free'])}
         return balances
 
-    def get_order_book(self, symbol, use_websocket=True):
-        if use_websocket:
-            redis.lpush('working_on_symbols', symbol)
-            while not (snapshot := redis.hget('snapshots', symbol)):
-                continue
-
-            redis.hdel('snapshots', symbol)
-            return json.loads(snapshot)
-
+    def get_order_book(self, symbol):
         request_uuid = uuid4()
         logger.info(f'[{request_uuid}] GET order book request for {symbol}')
         resp = self.get(f"api/v3/depth?symbol={symbol}", raw=True)
