@@ -12,7 +12,7 @@ def trading(symbol):
             'LUNABNB': {'normal': True},
             'BNBUSDT': {'normal': True}
         }
-        check_arbitrage(symbol, synthetic, 0)
+        check_arbitrage(symbol, synthetic, 0.3)
     
     if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
         symbol = 'LUNAUSDT'
@@ -20,7 +20,7 @@ def trading(symbol):
             'EURUSDT': {'normal': True},
             'LUNAEUR': {'normal': True}
         }
-        check_arbitrage(symbol, synthetic, 0)
+        check_arbitrage(symbol, synthetic, 0.3)
 
     if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
         symbol = 'MATICUSDT'
@@ -28,7 +28,7 @@ def trading(symbol):
             'MATICBNB': {'normal': True},
             'BNBUSDT': {'normal': True}
         }
-        check_arbitrage(symbol, synthetic, 0)
+        check_arbitrage(symbol, synthetic, 0.3)
 
     # if symbol in ['MATICUSDT', 'MATICTRY', 'USDTTRY']:
     #     symbol = 'MATICUSDT'
@@ -44,11 +44,13 @@ def trading(symbol):
             'BNBUSDT': {'normal': True},
             'SANDBNB': {'normal': True}
         }
-        check_arbitrage(symbol, synthetic, 0)
+        check_arbitrage(symbol, synthetic, 0.3)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     redis_client = get_client()
+
+    redis_client.set('trade_count', 0)
 
     POOL = ProcessPoolExecutor(2)
     # POOL = None

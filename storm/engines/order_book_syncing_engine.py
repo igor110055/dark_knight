@@ -28,7 +28,11 @@ def update_order_book(message: str, from_cache=False, last_sequence=None, redis=
     if not redis.hget('initialized', symbol) and not from_cache:
         redis.rpush('cached_responses:'+symbol, json.dumps(response))
 
-        return loop.run_in_executor(SLOW_POOL, get_order_book_snapshot, symbol)
+        if redis.setnx('getting_snapshot:'+symbol, 30):
+            binance.stream_symbol(symbol)
+            loop.run_in_executor(SLOW_POOL, get_order_book_snapshot, symbol)
+            redis.delete('getting_snapshot:'+symbol)
+        return 
         # return get_order_book_snapshot(symbol)
 
     logger.info(
@@ -101,7 +105,8 @@ def consolidate_order_book(response, order_book, order_book_ob):
 
 
 def get_order_book_snapshot(symbol):
-    data = binance.get_order_book(symbol)
+    # data = binance.get_order_book(symbol)
+    data = binance.websocket.snapshot[0]
     if redis.hget('initialized', symbol):
         return
 
