@@ -51,7 +51,6 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
             # ack
             # message = await websocket.recv()
 
-            print('hi')
             order_book_socket.send_json({'type': 'update_symbol', 'symbol': symbol})
             message = order_book_socket.recv_string()
             # pdb.set_trace()
