@@ -5,14 +5,13 @@ from .exchanges.binance import get_client
 from .utils import get_logger
 
 logger = get_logger(__file__)
-client = get_client()
+client = get_client(True)
 
-
+import pdb
 def convert_to_base_amount(symbol, price, quote_amount):
     min_amount = Decimal(client.get_min_quantity(symbol))
     absolute_base_amount = Decimal(price) / Decimal(quote_amount)
     return absolute_base_amount // min_amount * min_amount
-
 
 def first_triangle_order(trading_currency, trading_amount, symbol, assets, best_prices):
     # TODO: calulate price and amount

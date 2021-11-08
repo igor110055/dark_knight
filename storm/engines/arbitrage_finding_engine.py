@@ -9,24 +9,24 @@ def trading(symbol):
     if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
         symbol = 'LUNAUSDT'
         synthetic = {
-            'LUNABNB': {'normal': True},
-            'BNBUSDT': {'normal': True}
+            'LUNABNB': {'normal': True, 'assets': ['LUNA', 'BNB']},
+            'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
         }
         check_arbitrage(symbol, synthetic, 0.3)
     
     if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
         symbol = 'LUNAUSDT'
         synthetic = {
-            'EURUSDT': {'normal': True},
-            'LUNAEUR': {'normal': True}
+            'EURUSDT': {'normal': True, 'assets': ['EUR', 'USDT']},
+            'LUNAEUR': {'normal': True, 'assets': ['LUNA', 'EUR']}
         }
         check_arbitrage(symbol, synthetic, 0.3)
 
     if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
         symbol = 'MATICUSDT'
         synthetic = {
-            'MATICBNB': {'normal': True},
-            'BNBUSDT': {'normal': True}
+            'MATICBNB': {'normal': True, 'assets': ['MATIC', 'BNB']},
+            'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
         }
         check_arbitrage(symbol, synthetic, 0.3)
 
@@ -41,8 +41,8 @@ def trading(symbol):
     if symbol in ['SANDUSDT', 'BNBUSDT', 'SANDBNB']:
         symbol = 'SANDUSDT'
         synthetic = {
-            'BNBUSDT': {'normal': True},
-            'SANDBNB': {'normal': True}
+            'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']},
+            'SANDBNB': {'normal': True, 'assets': ['SAND', 'BNB']}
         }
         check_arbitrage(symbol, synthetic, 0.3)
 
@@ -61,6 +61,7 @@ if __name__ == '__main__':
                 continue
             for symbol in updated_symbols:
                 redis_client.hdel('updated_best_prices', symbol)
-                loop.run_in_executor(POOL, trading, symbol)
+                trading(symbol)
+                # loop.run_in_executor(POOL, trading, symbol)
     except KeyboardInterrupt:
         loop.close()

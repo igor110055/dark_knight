@@ -41,7 +41,7 @@ message_hash_key = secret_key.encode('utf-8')
 
 
 redis = get_client()
-
+import pdb
 
 def _request(method, path, params):
     # TODO: suspect hashing key is a bit slow
@@ -88,7 +88,7 @@ class Binance:
         self.websocket.close()
 
     def create_order(self, side, order_type, symbol, quantity, on_quote=False):
-        timestamp = int(time() * 1000)
+        timestamp = int(time.time() * 1000)
         data = {
             'symbol': symbol,
             'side': side,

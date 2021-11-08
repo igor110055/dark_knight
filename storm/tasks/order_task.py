@@ -13,8 +13,12 @@ binance_client.load_markets()
 redis = get_redis()
 file_handler = logging.FileHandler('arbitrage.log')
 logger = get_logger(__file__, handler=file_handler)
+trade_logger = get_logger('trading')
 engine = OrderEngine(binance_client)
 
+TRADE_COUNT = 5
+TRADING = False
+# import pdb
 # TODO: refactor two calculate price functions
 
 def calculate_synthetic_ask(best_prices_left, left_assets, best_prices_right, right_assets):
@@ -70,6 +74,8 @@ def calculate_synthetic_bid(best_prices_left, left_assets, best_prices_right, ri
 
 
 def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8, usdt_amount=Decimal('20.0')):
+    global TRADING
+
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
     order_book = OrderBook.get(natural_symbol)
@@ -105,6 +111,7 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
 
     buy_synthetic_sell_natural_return_perc = (natural_bid - synthetic_ask) / synthetic_ask * 100
     logger.info(f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
+
     if buy_synthetic_sell_natural_return_perc > target_perc:
         data = {
             'time': datetime.utcnow(),
@@ -127,10 +134,17 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
         #     print('found')
         # redis.set('TRADING', 'true', 1)
         trade_count = int(redis.get('trade_count') or 0)
-        if trade_count > 5:
+        if trade_count > TRADE_COUNT:
             return
-        if engine.buy_synthetic_sell_natural(natural_symbol, synthetic, best_prices_left, best_prices_right):
+
+        if TRADING:
+            return
+
+        TRADING = True
+
+        if (result := engine.buy_synthetic_sell_natural(natural_symbol, synthetic, best_prices_left, best_prices_right)):
             redis.set('trade_count', trade_count + 1)
+  
         # redis.set('TRADING', 'false')
 
         # elif natural[-4:] == 'BUSD':

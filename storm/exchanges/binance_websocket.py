@@ -27,15 +27,17 @@ def on_message(ws, message):
     if ws.symbol_updated:
         payload = {
             "method": "UNSUBSCRIBE",
-            'params': [f"{ws.old_symbol.lower()}@depth10@100ms"],
+            'params': [f"{ws.old_symbol.lower()}@depth5@100ms"],
             "id": 0
         }
         ws.send(json.dumps(payload))
 
+        time.sleep(1)
+
         payload = {
             "method": "SUBSCRIBE",
-            'params': [f"{ws.symbol.lower()}@depth10@100ms"],
-            "id": 0
+            'params': [f"{ws.symbol.lower()}@depth5@100ms"],
+            "id": 1
         }
         ws.send(json.dumps(payload))
         ws.symbol_updated = False
@@ -58,7 +60,7 @@ def on_message(ws, message):
 
     #     payload = {
     #         "method": "UNSUBSCRIBE",
-    #         'params': [f"{ws.symbol.lower()}@depth10@100ms"],
+    #         'params': [f"{ws.symbol.lower()}@depth5@100ms"],
     #         "id": 0
     #     }
     #     ws.send(json.dumps(payload))
@@ -78,7 +80,7 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     payload = {
         "method": "SUBSCRIBE",
-        'params': [f'{ws.symbol.lower()}@depth10@100ms'],
+        'params': [f'{ws.symbol.lower()}@depth5@100ms'],
         "id": 0
     }
     ws.send(json.dumps(payload))
@@ -94,7 +96,7 @@ def on_open(ws):
 
     #         payload = {
     #             "method": "SUBSCRIBE",
-    #             'params': [f'{symbol.lower()}@depth10@100ms'],
+    #             'params': [f'{symbol.lower()}@depth5@100ms'],
     #             "id": 0
     #         }
     #         ws.symbol = symbol
@@ -152,7 +154,8 @@ if __name__ == '__main__':
 
         elif message['type'] == 'retrieve_order_book':
             while (snapshot := wss.snapshot) is None:
-                time.sleep(0.1)
+                logger.info('getting symbol...')
+                time.sleep(0.2)
             snapshot = wss.snapshot
             wss.snapshot = None
             logger.info(snapshot)

@@ -9,9 +9,10 @@ from ..utils import get_logger
 logger = get_logger(__file__)
 redis = get_client()
 
+import pdb
 
 class OrderEngine:
-    def __init__(self, client, currency='USDT', amount=Decimal('20'), taker_fee=Decimal('0.001')):
+    def __init__(self, client, currency='USDT', amount=Decimal('40'), taker_fee=Decimal('0.001')):
         self.client = client
         self.trading_currency = currency
         self.trading_amount = amount
@@ -26,7 +27,16 @@ class OrderEngine:
         return absolute_base_amount // min_amount * min_amount
 
     def buy_synthetic_sell_natural(self, natural, synthetic, best_prices_left, best_prices_right, delay=300):
-        (left_symbol, (left_normal, left_assets)), (right_symbol, (right_normal, right_assets)) = synthetic.items()
+        natural_order = None
+        first_order = None
+        second_order = None
+
+        (left_symbol, left_items), (right_symbol, right_items) = synthetic.items()
+        left_normal = left_items['normal']
+        left_assets = left_items['assets']
+        right_normal = right_items['normal']
+        right_assets = right_items['assets']
+
 
         # best_prices_natural = json.loads(redis.hget('best_prices', natural))
         # best_prices_left = json.loads(redis.hget('best_prices', left_symbol))
@@ -64,7 +74,7 @@ class OrderEngine:
         try:
             # print(natural, natural[-4:] != 'USDT')
             if not self.can_trade(natural):
-                return
+                return 'cannot trade'
 
             left_order = None
             post_left_synthetic_order = None
@@ -81,7 +91,7 @@ class OrderEngine:
                 #     logger.info(f'[Order Engine] {left_symbol} time lag: {diff}')
                 #     if diff > delay:
                 #         return
-                left_order, amount = first_triangle_order(self.trading_currency, self.trading_amount, left_symbol, left_assets, best_prices_left, best_prices_right)
+                left_order, amount = first_triangle_order(self.trading_currency, self.trading_amount, left_symbol, left_assets, best_prices_left)
             else:
                 if left_normal:
                     # diff = now - best_prices_left['ask'][1][1]
@@ -209,4 +219,4 @@ class OrderEngine:
             # redis.set(int(time()), json.dumps(
             #     {'natural': natural, 'synthetic': synthetic, 'best_prices': bps, 'error': str(error)}))
 
-            return False
+            return error
