@@ -14,18 +14,16 @@ pink = "\x1b[35;21m"
 reset = "\x1b[0m"
 
 
-def get_logger(name, std=True):
+def get_logger(name, handler=None):
     if name in loggers:
         return loggers[name]
 
     logger = logging.getLogger(name)
     logger.propagate = False
-    if std:
-        handler = logging.StreamHandler()
-        format = logging.Formatter(
-            f'{green}%(asctime)s{reset} - %(levelname)s - {bold_red}[%(module)s]{reset} {pink}#%(funcName)s{reset}: %(message)s')
-        handler.setFormatter(format)
-        logger.addHandler(handler)
+    handler = handler or logging.StreamHandler()
+    format = logging.Formatter(f'{green}%(asctime)s{reset} - %(levelname)s - {bold_red}[%(module)s]{reset} {pink}#%(funcName)s{reset}: %(message)s')
+    handler.setFormatter(format)
+    logger.addHandler(handler)
     loggers[name] = logger
     return logger
 

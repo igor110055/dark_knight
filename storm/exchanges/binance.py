@@ -3,13 +3,14 @@ import csv
 import hashlib
 import hmac
 import os
-import random
-import sys
+from time import sleep
+import _thread
 from functools import lru_cache
 from queue import Queue
 from time import time
 from urllib.parse import urlencode, urljoin
 from uuid import uuid4
+from collections import deque
 
 import requests
 import requests.adapters
@@ -17,6 +18,7 @@ import simplejson as json
 import websockets
 from dotenv import load_dotenv
 from storm.clients.redis_client import get_client
+from .binance_websocket import get_binance_websocket
 
 from ..utils import get_logger
 
@@ -39,7 +41,7 @@ message_hash_key = secret_key.encode('utf-8')
 
 
 redis = get_client()
-
+import pdb
 
 def _request(method, path, params):
     # TODO: suspect hashing key is a bit slow
@@ -59,6 +61,7 @@ def _request(method, path, params):
 
 class Binance:
     SYMBOLS = None
+    websockets = Queue()
 
     def __init__(self, api_key, secret_key, init_symbols=False):
         self.api_key = api_key
@@ -67,11 +70,25 @@ class Binance:
         self.headers = {'X-MBX-APIKEY': api_key}
         self.message_hash_key = secret_key.encode('utf-8')
 
+        self.websocket = None
+        self.websocket_thread = None
+        self.health_check_thread = None
+
         if not Binance.SYMBOLS and init_symbols:
             Binance.SYMBOLS = load_symbols()
 
+    def stream_symbol(self, symbol):
+        self.websocket = get_binance_websocket()
+        self.websocket.symbol = symbol
+
+        self.websocket_thread = Thread(target=self.websocket.run_forever, kwargs={'ping_interval': 60, 'ping_timeout' : 30})
+        self.websocket_thread.start()
+
+    def stop_streaming(self):
+        self.websocket.close()
+
     def create_order(self, side, order_type, symbol, quantity, on_quote=False):
-        timestamp = int(time() * 1000)
+        timestamp = int(time.time() * 1000)
         data = {
             'symbol': symbol,
             'side': side,
@@ -96,26 +113,6 @@ class Binance:
                     for balance in data['balances'] if self.__is_larger_than_zero(balance['free'])}
         return balances
 
-    @staticmethod
-    def get_order_book(symbol, id=None):
-        # redis.delete('payloads')
-        id = id or random.randint(1, 100)
-        payload = {
-            "method": "SUBSCRIBE",
-            'params': [f'{symbol.lower()}@depth10@100ms'],
-            "id": id
-        }
-
-        redis.lpush('payloads', json.dumps(payload))
-
-        while not (message := redis.hget('snapshots', id)):
-            continue
-
-        redis.hdel('snapshots', id)
-        resp = json.loads(message)
-        # print(resp['lastUpdateId'])
-        return resp
-
     def get_order_book(self, symbol):
         request_uuid = uuid4()
         logger.info(f'[{request_uuid}] GET order book request for {symbol}')
@@ -139,7 +136,7 @@ class Binance:
 
     @staticmethod
     def post(path, params=None):
-        return _request.delay('POST', path, params)
+        return _request('POST', path, params)
 
     @staticmethod
     @lru_cache
@@ -156,100 +153,95 @@ def load_symbols():
         return {symbol['symbol']: symbol for symbol in csv.DictReader(csv_file)}
 
 
-def get_client():
-    return Binance(api_key, secret_key)
+def get_client(init_symbols=False):
+    return Binance(api_key, secret_key, init_symbols)
 
 
-async def websocket_pool(num=8):
-    tasks = []
-    for _ in range(num):
-        tasks.append(asyncio.create_task(
-            connect("wss://stream.binance.com:9443/ws")))
 
-    await asyncio.gather(*tasks)
+import websocket
+import threading
+import time
 
+loaded = {}
 
-async def handle(websocket, sleep_duration):
-    while True:
-        if not (payload := redis.rpop('payloads')):
-            await asyncio.sleep(0)
-            continue
+def on_message(ws, message):
+    # for symbol in ['LUNAUSDT', 'ETHUSDT']:
+    # print(message)
 
-        message_id = json.loads(payload)['id']
-        await websocket.send(payload)
+    if ws.symbol:
+        if ws.symbol not in loaded:
+            loaded[ws.symbol] = True
+            return
+        logger.info(message)
+        payload = {
+            "method": "UNSUBSCRIBE",
+            'params': [f"{ws.symbol.lower()}@depth10@100ms"],
+            "id": 0
+        }
 
-        message_received = False
-        while not message_received:
-            message = await websocket.recv()
-            if not 'result' in message:  # juice
-                redis.hset('snapshots', message_id, message)
-                payload = json.loads(payload)
-                payload['method'] = 'UNSUBSCRIBE'
+        ws.send(json.dumps(payload))
+        ws.symbol = None
 
-                await asyncio.sleep(sleep_duration)
+def on_error(ws, error):
+    print(error)
 
-                await websocket.send(json.dumps(payload))
+def on_close(ws, close_status_code, close_msg):
+    print("### closed ###")
 
-                message_received = True
-            else:
-                print(message)  # ack
+from threading import Thread
 
+symbols = Queue()
 
-async def connect(url, timeout=60*15, sleep_duration=0.5):
-    queue = Queue()
-    async for websocket in websockets.connect(url, ping_timeout=timeout):
-        for _ in range(5):
-            queue.put_nowait(websocket)
+def on_open(ws):
+    ws.symbol = None
+    def run(*args):
 
         while True:
-            try:
-                await handle(websocket, sleep_duration)
-            except websockets.ConnectionClosed:
-                websocket = queue.get_nowait()
-                if not websocket:
-                    sys.exit()
-                    raise Exception('No!')
-                    break
-
-
-# from websocket import WebSocketApp
-# from websocket._app import Dispatcher
-
-
-# class StormDispatcher(Dispatcher):
-#     """
-#     Dispatcher
-#     """
-#     def __init__(self, app, ping_timeout):
-#         self.app = app
-#         self.ping_timeout = ping_timeout
-
-#     def read(self, sock, read_callback, check_callback):
-#         while self.app.keep_running:
-#             sel = selectors.DefaultSelector()
-#             sel.register(self.app.sock.sock, selectors.EVENT_READ)
-
-#             r = sel.select(self.ping_timeout)
-#             if r:
-#                 if not read_callback():
-#                     break
-#             check_callback()
-#             sel.close()
-
-
-# def on_message(ws, message):
+            symbol = symbols.get()
+            if symbol is None:
+                break
+            payload = {
+                "method": "SUBSCRIBE",
+                'params': [f'{symbol.lower()}@depth10@100ms'],
+                "id": 0
+            }
+            ws.symbol = symbol
+            ws.send(json.dumps(payload))
+            time.sleep(0.1)
+            # ws.close()
+        logger.info("thread terminating...")
+    Thread(target=run).start()
+    # _thread.start_new_thread(run, ())
 
 
 if __name__ == '__main__':
     redis.delete('payloads', 'snapshots', 'initialized')
-    import threading
+    # from threading import Thread
+    # from multiprocessing import Process
 
-    threading.Thread(target=asyncio.run, args=(websocket_pool(), )).start()
+    # # task = Process(target=asyncio.run, args=(connect(WS_URL), ))
+    # # task.start()
 
-    for i in range(100):
-        print(Binance.get_order_book('BTCUSDT'))
-        print(Binance.get_order_book('ETHUSDT'))
-        print(Binance.get_order_book('LUNAUSDT'))
+    # for i in range(100):
+    #     print(asyncio.run(Binance.get_order_book_ws('BTCUSDT')))
+    #     print(asyncio.run(Binance.get_order_book_ws('ETHUSDT')))
+    #     print(asyncio.run(Binance.get_order_book_ws('LUNAUSDT')))
+
+    # websocket.enableTrace(True)
+    ws = websocket.WebSocketApp(WS_URL,
+                                on_open = on_open,
+                                on_message = on_message,
+                                on_error = on_error,
+                                on_close = on_close)
+    # ws.run_forever()
+    task = Thread(target=ws.run_forever)
+    task.start()
+
+    symbols.put('LUNAUSDT')
+    symbols.put('ETHUSDT')
+    symbols.put(None)
+
+    # task.join()
 
     print('done')
 

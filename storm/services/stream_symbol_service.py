@@ -12,6 +12,14 @@ redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
+import zmq
+
+context = zmq.Context()
+order_book_socket = context.socket(zmq.REQ)
+order_book_socket.connect('tcp://127.0.0.1:5556')
+
+import pdb
+
 async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis) -> None:
     """Stream symbols update from websocket, and cache into redis
 
@@ -43,6 +51,11 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
             # ack
             # message = await websocket.recv()
 
+            order_book_socket.send_json({'type': 'update_symbol', 'symbol': symbol})
+            message = order_book_socket.recv_string()
+            # pdb.set_trace()
+            logger.info(message)
+
             while not redis.hget('initialized', symbol):
                 message = await websocket.recv()
                 if 'result' in message:
@@ -58,8 +71,13 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
 
 
 if __name__ == '__main__':
+    import zmq
     from ..exchanges.binance import WS_URL
     from ..helpers.triangular_finder import get_symbols
+
+    context = zmq.Context()
+    order_book_socket = context.socket(zmq.REQ)
+    order_book_socket.connect('tcp://127.0.0.1:5556')
 
     loop = asyncio.get_event_loop()
 

@@ -49,3 +49,15 @@ use threads as pool, because this somehow ensure sequence of updates
 ```
 celery -A execution_engine worker --loglevel=INFO --pool=threads
 ```
+
+
+### Script
+```sh
+python -m storm.exchanges.binance_websocket
+
+python -m storm.engines.order_book_syncing_engine
+
+python -m storm.engines.order_streaming_engine
+
+python -m storm.engines.arbitrage_finding_engine
+```
