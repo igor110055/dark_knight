@@ -1,0 +1,5 @@
+alias dka='conda activate dark_knight'
+alias bws='python -m storm.exchanges.binance_websocket'
+alias obse='python -m storm.engines.order_book_syncing_engine'
+alias ose='python -m storm.engines.order_streaming_engine'
+alias afe='python -m storm.engines.arbitrage_finding_engine'
