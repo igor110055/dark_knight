@@ -2,8 +2,10 @@ import simplejson as json
 
 from ..models.order_book import OrderBook
 from ..utils import get_logger, symbol_lock
+from ..exchanges.binance import get_client
 
 logger = get_logger(__file__)
+binance = get_client()
 
 
 class SyncOrderBookService:
@@ -38,6 +40,7 @@ class SyncOrderBookService:
                 self.redis.hdel('last_sequences', symbol)
                 self.redis.rpush('cached_responses:'+symbol,
                                  json.dumps(response))
+                return self.get_order_book_snapshot(symbol, sync=True)
             return
 
         self.sync_orders(response)
@@ -94,11 +97,12 @@ class SyncOrderBookService:
                 order_book_ob.best_prices = {
                     'bids': best_bid, 'asks': best_ask}
 
-    def get_order_book_snapshot(self, symbol):
-        # data = binance.get_order_book(symbol)
-
-        self.order_book_socket.send_json({'type': 'retrieve_order_book'})
-        data = json.loads(self.order_book_socket.recv_json())
+    def get_order_book_snapshot(self, symbol, sync=False):
+        if sync:
+            data = binance.get_order_book(symbol)
+        else:
+            self.order_book_socket.send_json({'type': 'retrieve_order_book'})
+            data = json.loads(self.order_book_socket.recv_json())
         if self.redis.hget('initialized', symbol):
             return
 
