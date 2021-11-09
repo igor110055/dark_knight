@@ -9,6 +9,7 @@ from ..clients.redis_client import FRedis, get_client
 from ..utils import chunks, get_logger
 
 redis = get_client(a_sync=False)
+aredis = get_client(a_sync=True)
 logger = get_logger(__file__)
 
 
@@ -56,18 +57,18 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
             # pdb.set_trace()
             logger.info(message)
 
-            while not redis.hget('initialized', symbol):
+            while not await aredis.hget('initialized', symbol):
                 message = await websocket.recv()
                 if 'result' in message:
                     continue
                 logger.info(f'websocket update received on {message[19:52]} ...')
-                redis.lpush('responses', message)
+                await aredis.lpush('responses', message)
 
         async for message in websocket:
             if 'result' in message:
                 continue
             logger.info(f'websocket update received on {message[19:52]} ...')
-            redis.lpush('responses', message)
+            await aredis.lpush('responses', message)
 
 
 if __name__ == '__main__':

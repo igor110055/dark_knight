@@ -1,5 +1,4 @@
-import asyncio
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 import zmq
 
@@ -14,25 +13,20 @@ logger = get_logger(__file__)
 
 
 if __name__ == '__main__':
-    context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    socket.bind('tcp://127.0.0.1:5555')
-
-    loop = asyncio.get_event_loop()
-
     FAST_POOL = ThreadPoolExecutor(32)
 
+    context = zmq.Context()
     order_book_socket = context.socket(zmq.REQ)
     order_book_socket.connect('tcp://127.0.0.1:5556')
 
     logger.info('Ready to handle order book update')
 
     service = SyncOrderBookService(redis, binance, order_book_socket)
+
     while True:
-        message = socket.recv_string()
-        # update_order_book(message)
+        responses = redis.rpop('responses', 10)
+        if not responses:
+            continue
 
-        # TODO: fix zmq connection in process
-        loop.run_in_executor(FAST_POOL, service.update_order_book, message)
-
-        socket.send_string('')
+        # TODO: fix zmq connection in process, use ProcessPool
+        FAST_POOL.map(service.update_order_book, responses)
