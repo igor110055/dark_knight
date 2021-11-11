@@ -6,7 +6,7 @@ from ..services.stream_symbol_service import stream_symbols
 
 if __name__ == '__main__':
     redis = get_client(a_sync=False)
-    redis.delete('last_sequences', 'cached_responses', 'initialized')
+    redis.delete('last_sequences', 'cached_responses', 'initialized', 'responses')
 
     LUNA = set(['LUNAUSDT', 'BNBUSDT', 'LUNABNB'])
     MATIC = set(['MATICUSDT', 'MATICBNB', 'BNBUSDT'])

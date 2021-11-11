@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import zmq
 
@@ -13,15 +13,13 @@ logger = get_logger(__file__)
 
 
 if __name__ == '__main__':
-    FAST_POOL = ThreadPoolExecutor(32)
-
-    context = zmq.Context()
-    order_book_socket = context.socket(zmq.REQ)
-    order_book_socket.connect('tcp://127.0.0.1:5556')
+    FAST_POOL = ThreadPoolExecutor(10)
 
     logger.info('Ready to handle order book update')
 
-    service = SyncOrderBookService(redis, binance, order_book_socket)
+    service = SyncOrderBookService(redis, binance)
+
+    redis.delete('responses')
 
     while True:
         responses = redis.rpop('responses', 10)
@@ -30,3 +28,5 @@ if __name__ == '__main__':
 
         # TODO: fix zmq connection in process, use ProcessPool
         FAST_POOL.map(service.update_order_book, responses)
+        # for response in responses:
+        #     service.update_order_book(response)
