@@ -22,11 +22,7 @@ Architecture:
 
 - Threading for WebSockets (easier to share memory)
 
-- Celery for order execution (multiprocessing)
-  - update order book redis
-  - create order
-  - calculate PnL
-
+- Redis >= 6.2 (RPOP multiple)
 
 
 
@@ -61,3 +57,7 @@ python -m storm.engines.order_streaming_engine
 
 python -m storm.engines.arbitrage_finding_engine
 ```
+
+
+## Development setup
+1. Install redis and copy the `redis.conf` to `/etc/redis/redis.conf`
