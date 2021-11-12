@@ -63,14 +63,11 @@ def run(symbol):
     binance_ws.run_forever(ping_timeout=60)
 
 
-def publish(data: str, channel='order_book_snapshot'):
-    redis.publish(channel, data)
-
-
 def cleaner():
-    time.sleep(60)
-    for symbol in STOP_EVENTS:
-        STOP_EVENTS[symbol].set()
+    while True:
+        time.sleep(60)
+        for symbol in STOP_EVENTS:
+            STOP_EVENTS[symbol].set()
 
 
 if __name__ == '__main__':
@@ -107,10 +104,11 @@ if __name__ == '__main__':
                 logger.info('getting symbol...')
                 time.sleep(0.1)
                 if time.time() - start > 1:
-                    snapshot = json.dumps(binance.get_order_book(data['symbol']))
+                    snapshot = json.dumps(
+                        binance.get_order_book(data['symbol']))
                     break
 
-            publish(json.dumps({data['symbol']: snapshot}))
+            redis.hset('snapshots', symbol, snapshot)
 
         elif data['type'] == 'unsubscribe':
             if data['symbol'] in STOP_EVENTS:
@@ -118,7 +116,7 @@ if __name__ == '__main__':
                 stop_event.set()
 
         elif data['type'] == 'status':
-            resp = {symbol: process.is_alive()
+            status = {symbol: process.is_alive()
                     for symbol, process in WEBSOCKETS.items()}
 
-            publish(json.dumps(resp))
+            redis.set('status', json.dumps(status))
