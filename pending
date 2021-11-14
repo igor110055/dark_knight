@@ -8,4 +8,4 @@
 8. manually select arbitrage pairs ✅
 9. redis pipeline
 10. k8s
-11 zeromq load balancing
+11. zeromq load balancing ❌

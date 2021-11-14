@@ -1,16 +1,22 @@
+from time import sleep
+
 import simplejson as json
 
+from ..clients.redis_client import get_client
+from ..exchanges.binance import get_client as get_binance_client
 from ..models.order_book import OrderBook
-from ..utils import get_logger, symbol_lock
+from ..utils import get_logger, redis_lock
 
 logger = get_logger(__file__)
+redis = get_client(a_sync=False)
+binance = get_binance_client()
 
 
 class SyncOrderBookService:
-    def __init__(self, redis, binance, order_book_socket):
+    def __init__(self, redis=redis, binance=binance):
         self.redis = redis
+        self.subscriber = redis.pubsub()
         self.binance = binance
-        self.order_book_socket = order_book_socket
 
     # TODO: check passing string or retrieve from redis faster
     def update_order_book(self, message: str, from_cache=False, last_sequence=None):
@@ -22,8 +28,12 @@ class SyncOrderBookService:
         end_sequence = response['u']
 
         if not self.redis.hget('initialized', symbol) and not from_cache:
+            self.redis.publish('order_book_websocket', json.dumps(
+                {'type': 'subscribe', 'symbol': symbol}))
+
             self.redis.rpush('cached_responses:'+symbol, json.dumps(response))
-            return self.get_order_book_snapshot(symbol)
+            self.get_order_book_snapshot(symbol)
+            return False
 
         logger.info(
             f"{symbol} update: start sequence {start_sequence}, last sequence {self.redis.hget('last_sequences', symbol)}")
@@ -38,11 +48,14 @@ class SyncOrderBookService:
                 self.redis.hdel('last_sequences', symbol)
                 self.redis.rpush('cached_responses:'+symbol,
                                  json.dumps(response))
-            return
+                # self.get_order_book_snapshot(symbol)
+            return False
 
-        self.sync_orders(response)
+        self.sync_orders(response, from_cache)
 
-    def sync_orders(self, response):
+        return True
+
+    def sync_orders(self, response, from_cache=False):
         symbol = response['s']
         end_sequence = response['u']
 
@@ -69,6 +82,9 @@ class SyncOrderBookService:
         order_book_ob.save(order_book)
 
         # FIXME: not sure if this is necessary
+        if from_cache:
+            return
+
         self.consolidate_order_book(response, order_book, order_book_ob)
 
     def consolidate_order_book(self, response, order_book, order_book_ob):
@@ -94,11 +110,19 @@ class SyncOrderBookService:
                 order_book_ob.best_prices = {
                     'bids': best_bid, 'asks': best_ask}
 
-    def get_order_book_snapshot(self, symbol):
-        # data = binance.get_order_book(symbol)
+    def get_order_book_snapshot(self, symbol, sync=False):
+        if sync:
+            data = binance.get_order_book(symbol)
+        else:
+            self.redis.publish('order_book_websocket', json.dumps(
+                {'type': 'retrieve', 'symbol': symbol}))
+            self.redis.hdel('snapshots', symbol)
 
-        self.order_book_socket.send_json({'type': 'retrieve_order_book'})
-        data = json.loads(self.order_book_socket.recv_json())
+            while not (snapshot := self.redis.hget('snapshots', symbol)):
+                continue
+
+            data = json.loads(snapshot)
+
         if self.redis.hget('initialized', symbol):
             return
 
@@ -127,7 +151,7 @@ class SyncOrderBookService:
         if not (responses := self.redis.lrange('cached_responses:'+symbol, 0, -1)):
             return
 
-        with symbol_lock(self.redis, symbol):
+        with redis_lock(self.redis, f"applying_cached_response__{symbol}"):
             logger.info(f'Got the lock for {symbol}')
 
             for raw_response in responses:
@@ -148,7 +172,7 @@ class SyncOrderBookService:
                     logger.info(f'Uninitialized {symbol}')
                     # reset initialized status
                     self.redis.hdel('initialized', symbol)
-                    return False
+                    break
 
                 # TODO: continue only when update order book succeeded
                 self.update_order_book(

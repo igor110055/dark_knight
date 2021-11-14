@@ -28,18 +28,21 @@ def get_logger(name, handler=None):
     return logger
 
 
-class symbol_lock:
-    def __init__(self, redis_client, symbol):
+class redis_lock:
+    def __init__(self, redis_client, lock_key, ttl=5):
         self.redis_client = redis_client
-        self.symbol = symbol
+        self.lock_key = lock_key
+        self.lock_acquired = False
+        self.ttl = ttl
 
     def __enter__(self):
-        if not self.redis_client.setnx(f'working_on_{self.symbol}', 1):
-            return
-        yield
+        if self.redis_client.setnx(self.lock_key, self.ttl):
+            self.lock_acquired = True
+        return self.lock_acquired
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.redis_client.delete(f'working_on_{self.symbol}')
+        if self.lock_acquired:
+            self.redis_client.delete(self.lock_key)
 
 
 def chunks(lst, n):

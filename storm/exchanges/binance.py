@@ -1,24 +1,17 @@
-import asyncio
 import csv
 import hashlib
 import hmac
 import os
-from time import sleep
-import _thread
+import time
 from functools import lru_cache
 from queue import Queue
-from time import time
 from urllib.parse import urlencode, urljoin
 from uuid import uuid4
-from collections import deque
 
 import requests
 import requests.adapters
-import simplejson as json
-import websockets
 from dotenv import load_dotenv
-from storm.clients.redis_client import get_client
-from .binance_websocket import get_binance_websocket
+from storm.clients.redis_client import get_client as get_redis_client
 
 from ..utils import get_logger
 
@@ -40,8 +33,8 @@ headers = {'X-MBX-APIKEY': api_key}
 message_hash_key = secret_key.encode('utf-8')
 
 
-redis = get_client()
-import pdb
+redis = get_redis_client()
+
 
 def _request(method, path, params):
     # TODO: suspect hashing key is a bit slow
@@ -77,16 +70,6 @@ class Binance:
         if not Binance.SYMBOLS and init_symbols:
             Binance.SYMBOLS = load_symbols()
 
-    def stream_symbol(self, symbol):
-        self.websocket = get_binance_websocket()
-        self.websocket.symbol = symbol
-
-        self.websocket_thread = Thread(target=self.websocket.run_forever, kwargs={'ping_interval': 60, 'ping_timeout' : 30})
-        self.websocket_thread.start()
-
-    def stop_streaming(self):
-        self.websocket.close()
-
     def create_order(self, side, order_type, symbol, quantity, on_quote=False):
         timestamp = int(time.time() * 1000)
         data = {
@@ -102,7 +85,7 @@ class Binance:
         return self.post('api/v3/order', data)
 
     def get_balances(self):
-        timestamp = int(time() * 1000)
+        timestamp = int(time.time() * 1000)
         params = {
             'recvWindow': 5000,
             'timestamp': timestamp
@@ -117,7 +100,8 @@ class Binance:
         request_uuid = uuid4()
         logger.info(f'[{request_uuid}] GET order book request for {symbol}')
         resp = self.get(f"api/v3/depth?symbol={symbol}", raw=True)
-        logger.info(f'[{request_uuid}] GET order book response for {symbol}: {resp.content.decode()[:40]}')
+        logger.info(
+            f'[{request_uuid}] GET order book response for {symbol}: {resp.content.decode()[:40]}')
         return resp.json()
 
     def load_markets(self):
@@ -155,94 +139,3 @@ def load_symbols():
 
 def get_client(init_symbols=False):
     return Binance(api_key, secret_key, init_symbols)
-
-
-
-import websocket
-import threading
-import time
-
-loaded = {}
-
-def on_message(ws, message):
-    # for symbol in ['LUNAUSDT', 'ETHUSDT']:
-    # print(message)
-
-    if ws.symbol:
-        if ws.symbol not in loaded:
-            loaded[ws.symbol] = True
-            return
-        logger.info(message)
-        payload = {
-            "method": "UNSUBSCRIBE",
-            'params': [f"{ws.symbol.lower()}@depth10@100ms"],
-            "id": 0
-        }
-
-        ws.send(json.dumps(payload))
-        ws.symbol = None
-
-def on_error(ws, error):
-    print(error)
-
-def on_close(ws, close_status_code, close_msg):
-    print("### closed ###")
-
-from threading import Thread
-
-symbols = Queue()
-
-def on_open(ws):
-    ws.symbol = None
-    def run(*args):
-
-        while True:
-            symbol = symbols.get()
-            if symbol is None:
-                break
-            payload = {
-                "method": "SUBSCRIBE",
-                'params': [f'{symbol.lower()}@depth10@100ms'],
-                "id": 0
-            }
-            ws.symbol = symbol
-            ws.send(json.dumps(payload))
-            time.sleep(0.1)
-            # ws.close()
-        logger.info("thread terminating...")
-    Thread(target=run).start()
-    # _thread.start_new_thread(run, ())
-
-
-if __name__ == '__main__':
-    redis.delete('payloads', 'snapshots', 'initialized')
-    # from threading import Thread
-    # from multiprocessing import Process
-
-    # # task = Process(target=asyncio.run, args=(connect(WS_URL), ))
-    # # task.start()
-
-    # for i in range(100):
-    #     print(asyncio.run(Binance.get_order_book_ws('BTCUSDT')))
-    #     print(asyncio.run(Binance.get_order_book_ws('ETHUSDT')))
-    #     print(asyncio.run(Binance.get_order_book_ws('LUNAUSDT')))
-
-    # websocket.enableTrace(True)
-    ws = websocket.WebSocketApp(WS_URL,
-                                on_open = on_open,
-                                on_message = on_message,
-                                on_error = on_error,
-                                on_close = on_close)
-    # ws.run_forever()
-    task = Thread(target=ws.run_forever)
-    task.start()
-
-    symbols.put('LUNAUSDT')
-    symbols.put('ETHUSDT')
-    symbols.put(None)
-
-    # task.join()
-
-    print('done')
-
-    # asyncio.run(websocket_pool())
