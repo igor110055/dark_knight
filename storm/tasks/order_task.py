@@ -16,7 +16,7 @@ logger = get_logger(__file__, handler=file_handler)
 trade_logger = get_logger('trading')
 engine = OrderEngine(binance_client)
 
-TRADE_COUNT = 5
+TRADE_COUNT = 100
 TRADING = False
 # import pdb
 # TODO: refactor two calculate price functions
@@ -113,6 +113,7 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
     logger.info(f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
 
     if buy_synthetic_sell_natural_return_perc > target_perc:
+        print(f'[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}')
         data = {
             'time': datetime.utcnow(),
             'strategy': 'buy_synthetic_sell_natural',
@@ -137,15 +138,15 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
         if trade_count > TRADE_COUNT:
             return
 
+        # FIXME: this does not block concurrent trade
         if TRADING:
             return
 
         TRADING = True
 
+        # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
         if (result := engine.buy_synthetic_sell_natural(natural_symbol, synthetic, best_prices_left, best_prices_right)):
             redis.set('trade_count', trade_count + 1)
-  
-        # redis.set('TRADING', 'false')
 
         # elif natural[-4:] == 'BUSD':
         #     if engines['BUSD'].buy_synthetic_sell_natural(natural, synthetic, best_prices):

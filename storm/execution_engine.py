@@ -1,5 +1,4 @@
 from decimal import Decimal
-from time import time
 
 from .exchanges.binance import get_client
 from .utils import get_logger
@@ -7,7 +6,7 @@ from .utils import get_logger
 logger = get_logger(__file__)
 client = get_client(True)
 
-import pdb
+
 def convert_to_base_amount(symbol, price, quote_amount):
     min_amount = Decimal(client.get_min_quantity(symbol))
     absolute_base_amount = Decimal(price) / Decimal(quote_amount)
@@ -18,6 +17,7 @@ def first_triangle_order(trading_currency, trading_amount, symbol, assets, best_
     base_asset, quote_asset = assets
     order = None
 
+    # FIXME: extend from USDT quoted asset
     if quote_asset == trading_currency:
         best_ask = Decimal(best_prices['asks'])
         # best_ask_amount = best_prices['asks'][1]

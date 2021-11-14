@@ -9,7 +9,6 @@ from ..utils import get_logger
 logger = get_logger(__file__)
 redis = get_client()
 
-import pdb
 
 class OrderEngine:
     def __init__(self, client, currency='USDT', amount=Decimal('40'), taker_fee=Decimal('0.001')):
@@ -79,7 +78,7 @@ class OrderEngine:
             left_order = None
             post_left_synthetic_order = None
 
-            now = int(time()*1000)
+            # now = int(time()*1000)  TODO: check
             if self.trading_currency in left_assets:  # check start position, left or right
                 # if left_normal:
                 #     diff = now - best_prices_left['ask'][1][1]
