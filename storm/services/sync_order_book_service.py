@@ -5,7 +5,7 @@ import simplejson as json
 from ..clients.redis_client import get_client
 from ..exchanges.binance import get_client as get_binance_client
 from ..models.order_book import OrderBook
-from ..utils import get_logger, symbol_lock
+from ..utils import get_logger, redis_lock
 
 logger = get_logger(__file__)
 redis = get_client(a_sync=False)
@@ -151,7 +151,7 @@ class SyncOrderBookService:
         if not (responses := self.redis.lrange('cached_responses:'+symbol, 0, -1)):
             return
 
-        with symbol_lock(self.redis, symbol):
+        with redis_lock(self.redis, f"applying_cached_response__{symbol}"):
             logger.info(f'Got the lock for {symbol}')
 
             for raw_response in responses:
