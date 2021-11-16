@@ -84,6 +84,17 @@ class Binance:
             data['quantity'] = quantity
         return self.post('api/v3/order', data)
 
+    def get_order(self, symbol, order_id):
+        timestamp = int(time.time() * 1000)
+        params = {
+            'symbol': symbol,
+            'orderId': order_id,
+            'recvWindow': 5000,
+            'timestamp': timestamp
+        }
+
+        return self.get('api/v3/order', params=params)
+
     def get_orders(self, symbol, limit=100):
         timestamp = int(time.time() * 1000)
         params = {

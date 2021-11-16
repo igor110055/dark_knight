@@ -1,15 +1,17 @@
 from .base import Base
 from sqlalchemy import Column, Integer, String, Numeric, ForeignKey
+from sqlalchemy.orm import relationship
 
 
 class Fill(Base):
     __tablename__ = 'fills'
 
     id = Column(Integer, primary_key=True)
-    asset = Column(String)  # TODO: foreign key
+    symbol = Column(String)  # TODO: foreign key
     price = Column(Numeric)
     quantity = Column(Numeric)
     commission = Column(Numeric)
-    commission_asset = Column(Numeric)
+    commission_asset = Column(String)
     order_id = Column(Integer, ForeignKey('orders.id'))
-    # trade_id = Column(ForeignKey('trades'))
+    order = relationship('Order', back_populates='fills')
+    trade_id = Column(Integer)
