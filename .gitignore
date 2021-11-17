@@ -4,3 +4,4 @@
 .env
 arbitrage*
 build/*
+*.egg-info/*

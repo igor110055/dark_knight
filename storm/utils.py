@@ -33,18 +33,19 @@ class redis_lock:
         self.redis_client = redis_client
         self.lock_key = lock_key
         self.lock_acquired = False
+        self.degrade = False
         self.ttl = ttl
 
     def __enter__(self):
         if self.redis_client.setnx(self.lock_key, 1):
-            self.redis_client.expire(self.lock_key, self.ttl)
             self.lock_acquired = True
-        return self.lock_acquired
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.lock_acquired:
-            self.redis_client.expire(self.lock_key, 1)
-            # self.redis_client.delete(self.lock_key)
+        if self.degrade:
+            self.redis_client.expire(self.lock_key, 5)
+        elif self.lock_acquired:
+            self.redis_client.delete(self.lock_key)
 
 
 def chunks(lst, n):
