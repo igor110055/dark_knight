@@ -1,4 +1,5 @@
-from concurrent.futures import ProcessPoolExecutor
+from time import sleep
+from multiprocessing import Manager, Process, current_process
 
 from ..clients.redis_client import get_client
 from ..tasks.order_task import check_arbitrage
@@ -78,21 +79,35 @@ def trading(symbol):
             check_arbitrage(symbol, synthetic, 0.25)
 
 
-if __name__ == '__main__':
-    redis_client = get_client()
+def get_arbitrage_opportunity(symbols):
+    while True:
+        if (symbol := symbols.get()):
+            trading(symbol)
+            print(symbol, current_process())
+        else:
+            sleep(0.001)
 
+
+if __name__ == '__main__':
+    manager = Manager()
+    symbols = manager.Queue()
+
+    redis_client = get_client()
     redis_client.set('trade_count', 0)
 
-    POOL = ProcessPoolExecutor(16)
-    # POOL = None
+    for _ in range(8):
+        Process(target=get_arbitrage_opportunity, args=(symbols, )).start()
 
     print('start arbitrage')
 
+    subscriber = redis_client.pubsub()
+
+    # TODO: use psubscribe to capture symbol and updated timestamp
+    subscriber.subscribe('updated_best_prices')
+
     while True:
-        if not (updated_symbols := redis_client.hgetall('updated_best_prices')):
-            continue
-        symbols = list(updated_symbols)
-        redis_client.hdel('updated_best_prices', *symbols)
-        # for symbol in updated_symbols:
-        #     trading(symbol)
-        POOL.map(trading, symbols)
+        message = subscriber.get_message()
+        if message and 'data' in message:
+            symbols.put_nowait(message['data'])
+        else:
+            sleep(0.001)

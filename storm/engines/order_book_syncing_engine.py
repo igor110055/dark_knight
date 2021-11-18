@@ -19,6 +19,7 @@ def main(r_num=16):
         if not responses:
             continue
 
+        # TODO: can cache response by symbols, to enable parallel processing
         # TODO: fix zmq connection in process, use ProcessPool
         FAST_POOL.map(service.update_order_book, responses)
 

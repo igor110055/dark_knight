@@ -104,7 +104,7 @@ class SyncOrderBookService:
                 if best_prices and best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
                     return
 
-                self.redis.hset('updated_best_prices', symbol, 1)
+                self.redis.publish('updated_best_prices', symbol)
                 logger.info(
                     f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
                 order_book_ob.best_prices = {
