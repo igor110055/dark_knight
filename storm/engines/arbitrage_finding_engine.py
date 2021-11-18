@@ -83,7 +83,6 @@ def get_arbitrage_opportunity(symbols):
     while True:
         if (symbol := symbols.get()):
             trading(symbol)
-            print(symbol, current_process())
         else:
             sleep(0.001)
 
@@ -95,7 +94,7 @@ if __name__ == '__main__':
     redis_client = get_client()
     redis_client.set('trade_count', 0)
 
-    for _ in range(8):
+    for _ in range(16):
         Process(target=get_arbitrage_opportunity, args=(symbols, )).start()
 
     print('start arbitrage')

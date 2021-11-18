@@ -100,15 +100,8 @@ class SyncOrderBookService:
                 self.redis.hdel('initialized', symbol)
 
             else:
-                best_prices = order_book_ob.best_prices
-                if best_prices and best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
-                    return
-
+                order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
                 self.redis.publish('updated_best_prices', symbol)
-                logger.info(
-                    f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
-                order_book_ob.best_prices = {
-                    'bids': best_bid, 'asks': best_ask}
 
     def get_order_book_snapshot(self, symbol, sync=False):
         if sync:

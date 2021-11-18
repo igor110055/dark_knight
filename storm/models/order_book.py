@@ -83,11 +83,11 @@ class OrderBook:
     # Important: for arbitrage
     @property
     def best_prices(self):
-        prices = self.redis.hget('best_orders', self.symbol)
+        prices = self.redis.get(f'best_orders:{self.symbol}')
         if not prices:
             return None
         return json.loads(prices)
 
     @best_prices.setter
     def best_prices(self, best_prices):
-        self.redis.hset('best_orders', self.symbol, json.dumps(best_prices))
+        self.redis.set(f'best_orders:{self.symbol}', json.dumps(best_prices), 1)
