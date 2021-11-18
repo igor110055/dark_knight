@@ -7,11 +7,11 @@ class Order(Base):
     __tablename__ = 'orders'
 
     id = Column(Integer, primary_key=True)
-    group_id = Column(String)
+    group_id = Column(String, index=True)
     symbol = Column(String)
     type = Column(String)  # TODO: enum
     side = Column(String)  # TODO: enum
-    external_id = Column(Integer)
+    external_id = Column(Integer, index=True)
     price = Column(Numeric)
     quantity = Column(Numeric)
     executed_quantity = Column(Numeric)
