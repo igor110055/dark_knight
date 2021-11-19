@@ -100,15 +100,8 @@ class SyncOrderBookService:
                 self.redis.hdel('initialized', symbol)
 
             else:
-                best_prices = order_book_ob.best_prices
-                if best_prices and best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
-                    return
-
-                self.redis.hset('updated_best_prices', symbol, 1)
-                logger.info(
-                    f'Update best prices for {symbol}: best bid {best_bid}, best ask {best_ask}')
-                order_book_ob.best_prices = {
-                    'bids': best_bid, 'asks': best_ask}
+                order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
+                self.redis.publish('updated_best_prices', symbol)
 
     def get_order_book_snapshot(self, symbol, sync=False):
         if sync:
@@ -119,6 +112,7 @@ class SyncOrderBookService:
             self.redis.hdel('snapshots', symbol)
 
             while not (snapshot := self.redis.hget('snapshots', symbol)):
+                sleep(0.001)
                 continue
 
             data = json.loads(snapshot)
@@ -151,36 +145,38 @@ class SyncOrderBookService:
         if not (responses := self.redis.lrange('cached_responses:'+symbol, 0, -1)):
             return
 
-        with redis_lock(self.redis, f"applying_cached_response__{symbol}"):
-            logger.info(f'Got the lock for {symbol}')
+        with redis_lock(self.redis, f"applying_cached_response__{symbol}") as lock:
+            if lock.lock_acquired:
+                logger.info(f'Got the lock for {symbol}')
 
-            for raw_response in responses:
-                response = json.loads(raw_response)
+                for raw_response in responses:
+                    response = json.loads(raw_response)
 
-                last_sequence = response['u']
-                if last_sequence <= last_update_id:
-                    continue
-
-                if not self.redis.hget('initialized', symbol):
-                    if not self.has_order_book_initialized(response, last_update_id):
+                    last_sequence = response['u']
+                    if last_sequence <= last_update_id:
                         continue
 
-                    logger.info(f"Initialized {symbol}")
-                    self.redis.hset('initialized', symbol, 1)
+                    if not self.redis.hget('initialized', symbol):
+                        if not self.has_order_book_initialized(response, last_update_id):
+                            continue
 
-                elif not self.is_subsequent_response(response, last_sequence):
-                    logger.info(f'Uninitialized {symbol}')
-                    # reset initialized status
-                    self.redis.hdel('initialized', symbol)
-                    break
+                        logger.info(f"Initialized {symbol}")
+                        self.redis.hset('initialized', symbol, 1)
 
-                # TODO: continue only when update order book succeeded
-                self.update_order_book(
-                    raw_response, from_cache=True, last_sequence=last_sequence)
-                self.redis.hset('last_sequences', symbol, last_sequence)
+                    elif not self.is_subsequent_response(response, last_sequence):
+                        logger.info(f'Uninitialized {symbol}')
+                        # reset initialized status
+                        self.redis.hdel('initialized', symbol)
+                        break
 
-        self.redis.delete('cached_responses:'+symbol)  # remove stale responses
-        logger.info(f'Release the lock for {symbol}')
+                    # TODO: continue only when update order book succeeded
+                    self.update_order_book(
+                        raw_response, from_cache=True, last_sequence=last_sequence)
+                    self.redis.hset('last_sequences', symbol, last_sequence)
+
+                self.redis.delete('cached_responses:'+symbol)  # remove stale responses
+                logger.info(f'Release the lock for {symbol}')
+
         return True
 
     def has_order_book_initialized(self, response, last_update_id):

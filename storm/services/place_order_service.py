@@ -5,6 +5,8 @@ from ..execution_engine import first_triangle_order
 
 from ..clients.redis_client import get_client
 from ..utils import get_logger
+from ..models.session import get_session
+from .save_arbitrage_orders_service import SaveArbitrageOrdersService
 
 logger = get_logger(__file__)
 redis = get_client()
@@ -16,6 +18,7 @@ class OrderEngine:
         self.trading_currency = currency
         self.trading_amount = amount
         self.taker_fee = taker_fee
+        self.save_arbitrage_orders_service = SaveArbitrageOrdersService(get_session())
 
     def can_trade(self, currency):
         return currency[-4:] == self.trading_currency or currency[-4:] == self.trading_currency
@@ -90,12 +93,12 @@ class OrderEngine:
                 # amount = Decimal(left_order['amount'])
                 # if left_normal:
                 #     amount *= Decimal('0.999')
-                second_order = post_right_synthetic_order(self.trading_amount*Decimal('0.99'))
+                second_order = right_order = post_right_synthetic_order(self.trading_amount*Decimal('0.99'))
             else:
                 # amount = Decimal(right_order['amount'])
                 # if right_normal:
                 #     amount *= Decimal('0.999')
-                second_order = post_left_synthetic_order(self.trading_amount*Decimal('0.99'))
+                second_order = left_order = post_left_synthetic_order(self.trading_amount*Decimal('0.99'))
 
             if 'code' in second_order:
                 logger.error(
@@ -110,6 +113,12 @@ class OrderEngine:
             #     right_symbol: best_prices_right
             # }
             # redis.set(f"done_{int(time())}", json.dumps({'natural': natural, 'synthetic': synthetic, 'best_prices': bps, 'first_order': first_order.id, 'second_order': second_order.id, 'natural_order': natural_order.id}))
+
+            try:
+                self.save_arbitrage_orders_service.execute(natural_order, first_order, second_order)
+            except Exception as error:
+                logger.error(f'Save arbitrage orders raised error {error}')
+
             return True
         except Exception as error:
             logger.error(
@@ -304,6 +313,12 @@ class OrderEngine:
             #     right_symbol: best_prices_right
             # }
             # redis.set(f"done_{int(time())}", json.dumps({'natural': natural, 'synthetic': synthetic, 'best_prices': bps, 'first_order': first_order.id, 'second_order': second_order.id, 'natural_order': natural_order.id}))
+
+            try:
+                self.save_arbitrage_orders_service.execute(natural_order, first_order, second_order)
+            except Exception as error:
+                logger.error(f'Save arbitrage orders raised error {error}')
+
             return True
         except Exception as error:
             logger.error(

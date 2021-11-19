@@ -139,11 +139,14 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
             return
 
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
-        with redis_lock(redis, f"buy_synthetic_sell_natural__{natural_symbol}_{left_curr}_{right_curr}"):
-            traded = engine.buy_synthetic_sell_natural(
-                natural_symbol, synthetic, best_prices_left, best_prices_right)
-            if traded:
-                redis.set('trade_count', trade_count + 1)
+        with redis_lock(redis, f"buy_synthetic_sell_natural__{natural_symbol}_{left_curr}_{right_curr}") as lock:
+            if lock.lock_acquired:
+                traded = engine.buy_synthetic_sell_natural(
+                    natural_symbol, synthetic, best_prices_left, best_prices_right)
+                if traded:
+                    redis.set('trade_count', trade_count + 1)
+                
+                lock.degrade = True
 
         # elif natural[-4:] == 'BUSD':
         #     if engines['BUSD'].buy_synthetic_sell_natural(natural, synthetic, best_prices):
@@ -180,11 +183,14 @@ def check_arbitrage(natural_symbol, synthetic, target_perc=0.4, upper_bound=0.8,
             return
 
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
-        with redis_lock(redis, f"buy_natural_sell_synthetic__{natural_symbol}_{left_curr}_{right_curr}"):
-            traded = engine.buy_natural_sell_synthetic(
-                natural_symbol, synthetic, best_prices_left, best_prices_right, best_prices_natural)
-            if traded:
-                redis.set('trade_count', trade_count + 1)
+        with redis_lock(redis, f"buy_natural_sell_synthetic__{natural_symbol}_{left_curr}_{right_curr}") as lock:
+            if lock.lock_acquired:
+                traded = engine.buy_natural_sell_synthetic(
+                    natural_symbol, synthetic, best_prices_left, best_prices_right, best_prices_natural)
+                if traded:
+                    redis.set('trade_count', trade_count + 1)
+
+                lock.degrade = True
     # pprint(
     #     sorted(order_book['bids'].items(),
     #            key=lambda item: item[0],

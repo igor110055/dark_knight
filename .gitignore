@@ -3,3 +3,6 @@
 *.vscode
 .env
 arbitrage*
+build/*
+*.egg-info/*
+*.db
