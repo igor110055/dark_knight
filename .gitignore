@@ -5,3 +5,4 @@
 arbitrage*
 build/*
 *.egg-info/*
+*.db
