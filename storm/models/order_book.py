@@ -19,15 +19,6 @@ class OrderBook:
 
         OrderBook._registry[symbol] = self
 
-    def populate(self, bids: dict, asks: dict):
-        self.clear()
-
-        if bids:
-            self.redis.hmset(f"{self.bids_key}", bids)
-
-        if asks:
-            self.redis.hmset(f"{self.asks_key}", asks)
-
     # def delete(self, side, price):
     #     self.redis.srem(f"{self.symbol}:{side}:prices", price)
     #     self.redis.hdel(f"{self.symbol}:{side}", price)
@@ -36,13 +27,14 @@ class OrderBook:
     #     self.redis.sadd(f"{self.symbol}:{side}:prices", price)
     #     self.redis.hset(f"{self.symbol}:{side}", price, amount)
 
-    def clear(self, deep=True):
-        if deep:
-            self.redis.delete(self.bids_key, self.asks_key)
+    def clear(self):
+        self.redis.delete(self.bids_key, self.asks_key)
         self.redis.delete(f"best_prices:{self.symbol}:*")
 
     def save(self, book):
-        self.populate(book['bids'], book['asks'])
+        self.clear()  # TODO: remove, too costly
+        self.redis.hmset(f"{self.bids_key}", book['bids'])
+        self.redis.hmset(f"{self.asks_key}", book['asks'])
 
     def get_best(self, top=None):
         return {'bids': self.get_best_bids(top), 'asks': self.get_best_asks(top)}
