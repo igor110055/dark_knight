@@ -112,6 +112,7 @@ class SyncOrderBookService:
             self.redis.hdel('snapshots', symbol)
 
             while not (snapshot := self.redis.hget('snapshots', symbol)):
+                sleep(0.001)
                 continue
 
             data = json.loads(snapshot)

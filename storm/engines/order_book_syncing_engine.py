@@ -1,6 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-
 from multiprocessing import Process
+from time import sleep
 from ..clients.redis_client import get_client
 from ..services.sync_order_book_service import SyncOrderBookService
 from ..utils import get_logger
@@ -9,19 +8,18 @@ redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
-def main(r_num=16):
-    FAST_POOL = ThreadPoolExecutor(r_num)
-
+def main():
     service = SyncOrderBookService()
 
     while True:
-        responses = redis.rpop('responses', r_num)
-        if not responses:
+        response = redis.rpop('responses')
+        if not response:
+            sleep(0.001)
             continue
 
         # TODO: can cache response by symbols, to enable parallel processing
         # TODO: fix zmq connection in process, use ProcessPool
-        FAST_POOL.map(service.update_order_book, responses)
+        service.update_order_book(response)
 
 
 if __name__ == '__main__':
