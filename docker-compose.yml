@@ -5,12 +5,46 @@ services:
         network_mode: "host"
         ports:
             - 6379:6379
+
+    order-book-snapshot-engine:
+        image: storm:engine
+        build:
+            context: .
+            dockerfile: ./docker/Dockerfile.engine
+        network_mode: host
+        environment:  # TODO: remove binance if unnecessary
+            - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
+            - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
+        command: -m storm.engines.order_book_snapshot_engine
+
+    order-book-syncing-engine:
+        image: storm:engine
+        build:
+            context: .
+            dockerfile: ./docker/Dockerfile.engine
+        network_mode: host
+        environment:
+            - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
+            - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
+        command: -m storm.engines.order_book_syncing_engine
+
+    order-streaming-engine:
+        image: storm:engine
+        build:
+            context: .
+            dockerfile: ./docker/Dockerfile.engine
+        network_mode: host
+        environment:
+            - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
+            - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
+        command: -m storm.engines.order_streaming_engine
+
     arbitrage-finding-engine:
         image: storm:engine
         build:
             context: .
             dockerfile: ./docker/Dockerfile.engine
-        network_mode: "host"
+        network_mode: host
         environment:
             - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
             - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
