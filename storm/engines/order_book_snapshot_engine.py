@@ -3,8 +3,8 @@ from threading import Event, Thread
 
 import simplejson as json
 import websocket
-from storm.clients.redis_client import get_client
 
+from ..clients.redis_client import get_client
 from ..exchanges.binance import get_client as get_binance
 from ..utils import get_logger
 

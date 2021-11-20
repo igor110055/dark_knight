@@ -5,7 +5,7 @@ from .base import Base
 
 
 class Arbitrage(Base):
-    __tablename__ = 'arbitrages'
+    __tablename__ = "arbitrages"
 
     id = Column(Integer, primary_key=True)
     # buy natural sell synthetic / buy synthetic sell natural
@@ -19,4 +19,5 @@ class Arbitrage(Base):
     fee_quantity = Column(Numeric)
 
     orders = relationship(
-        'Order', primaryjoin="foreign(Arbitrage.group_id)==Order.group_id")
+        "Order", primaryjoin="foreign(Arbitrage.group_id)==Order.group_id"
+    )

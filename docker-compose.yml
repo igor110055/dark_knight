@@ -51,5 +51,6 @@ services:
             # - REDIS_HOST=redis  # not required with network_mode is host
         volumes:
             - ./arbitrage.log:/usr/src/app/arbitrage.log
+            - ./arbitrage.csv:/usr/src/app/arbitrage.csv
             - ./storm.db:/usr/src/app/storm.db
         command: -m storm.engines.arbitrage_finding_engine
