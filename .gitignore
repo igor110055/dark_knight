@@ -6,3 +6,4 @@ arbitrage*
 build/*
 *.egg-info/*
 *.db
+.pytest_cache/*

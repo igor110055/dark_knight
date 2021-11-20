@@ -11,6 +11,7 @@ websocket-client
 urllib3
 hiredis
 aioredis
+sqlalchemy
 
 # dev
 pytest

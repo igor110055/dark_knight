@@ -4,14 +4,14 @@ from typing import List
 
 import simplejson as json
 import websockets
-from ..clients.redis_client import FRedis, get_client
+from ..clients.redis_client import get_client
 from ..utils import chunks, get_logger
 
 redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
-async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis: FRedis = redis) -> None:
+async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis = redis) -> None:
     """Stream symbols update from websocket, and cache into redis
 
     Args:
