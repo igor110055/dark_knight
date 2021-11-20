@@ -7,3 +7,4 @@ build/*
 *.egg-info/*
 *.db
 .pytest_cache/*
+.mypy_cache/*
