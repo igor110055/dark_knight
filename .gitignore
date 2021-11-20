@@ -2,7 +2,8 @@
 *__pycache__
 *.vscode
 .env
-arbitrage*
+arbitrage.csv
+arbitrage.log
 build/*
 *.egg-info/*
 *.db

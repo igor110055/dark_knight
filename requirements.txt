@@ -2,13 +2,10 @@ requests
 websockets
 networkx
 matplotlib
-ccxt
 python-dotenv
-celery
 simplejson
 redis
 websocket-client
-urllib3
 hiredis
 aioredis
 sqlalchemy
