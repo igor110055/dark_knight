@@ -100,8 +100,13 @@ class SyncOrderBookService:
                 self.redis.hdel('initialized', symbol)
 
             else:
+                best_prices = order_book_ob.best_prices
+                # no changes in top bid ask, no arbitrage opportunity
+                if best_prices and best_prices['bids'] == best_bid and best_prices['asks'] == best_ask:
+                    return
+                logger.info(f"{symbol} best bid ask changed: best_bid {best_bid}, best_ask {best_ask}")
                 order_book_ob.best_prices = {'bids': best_bid, 'asks': best_ask}
-                self.redis.publish('updated_best_prices', symbol)
+                self.redis.lpush('updated_best_prices', symbol)
 
     def get_order_book_snapshot(self, symbol, sync=False):
         if sync:
@@ -112,7 +117,7 @@ class SyncOrderBookService:
             self.redis.hdel('snapshots', symbol)
 
             while not (snapshot := self.redis.hget('snapshots', symbol)):
-                sleep(0.001)
+                sleep(0.01)
                 continue
 
             data = json.loads(snapshot)

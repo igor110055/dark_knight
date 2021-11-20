@@ -12,19 +12,19 @@ def main():
     service = SyncOrderBookService()
 
     while True:
-        response = redis.rpop('responses')
-        if not response:
+        response = redis.brpop('responses', 0.001)
+        if response:
+            service.update_order_book(response[1])
+        else:
             sleep(0.001)
-            continue
 
         # TODO: can cache response by symbols, to enable parallel processing
         # TODO: fix zmq connection in process, use ProcessPool
-        service.update_order_book(response)
 
 
 if __name__ == '__main__':
     logger.info('Ready to handle order book update')
     redis.delete('responses')
 
-    for _ in range(4):
+    for _ in range(6):
         Process(target=main).start()

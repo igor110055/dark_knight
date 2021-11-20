@@ -84,20 +84,23 @@ def get_arbitrage_opportunity():
 
     while True:
         # TODO: separate into different list of symbols, use brpop
-        if (symbol := redis_client.rpop('updated_best_prices')):
-            trading(symbol)
+        if (symbol := redis_client.brpop('updated_best_prices', 0.001)):
+            trading(symbol[1])
         else:
             sleep(0.001)
 
 
 if __name__ == '__main__':
     redis_client = get_client()
+    redis_client.delete('updated_best_prices')
     redis_client.set('trade_count', 0)
+
+    print('start arbitrage')
 
     for _ in range(4):
         Process(target=get_arbitrage_opportunity).start()
 
-    print('start arbitrage')
+    # get_arbitrage_opportunity()
 
     # TODO: use psubscribe to capture symbol and updated timestamp
 
