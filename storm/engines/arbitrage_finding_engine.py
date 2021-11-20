@@ -13,6 +13,15 @@ EXPECTED_RETURN = 0.1
 
 
 def trading(symbol):
+    if symbol in ['ETHUSDT', 'BNBETH', 'BNBUSDT']:
+        if all(redis_client.hmget('initialized', 'ETHUSDT', 'BNBETH', 'BNBUSDT')):
+            symbol = 'ETHUSDT'
+            synthetic = {
+                'BNBETH': {'normal': False, 'assets': ['BNB', 'ETH']},
+                'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
+            }
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+
     if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
         if all(redis_client.hmget('initialized', 'LUNAUSDT', 'LUNABNB', 'BNBUSDT')):
             symbol = 'LUNAUSDT'
@@ -22,14 +31,14 @@ def trading(symbol):
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
-        if all(redis_client.hmget('initialized', 'LUNAUSDT', 'EURUSDT', 'LUNAEUR')):
-            symbol = 'LUNAUSDT'
-            synthetic = {
-                'EURUSDT': {'normal': True, 'assets': ['EUR', 'USDT']},
-                'LUNAEUR': {'normal': True, 'assets': ['LUNA', 'EUR']}
-            }
-            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+    # if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
+    #     if all(redis_client.hmget('initialized', 'LUNAUSDT', 'EURUSDT', 'LUNAEUR')):
+    #         symbol = 'LUNAUSDT'
+    #         synthetic = {
+    #             'EURUSDT': {'normal': True, 'assets': ['EUR', 'USDT']},
+    #             'LUNAEUR': {'normal': True, 'assets': ['LUNA', 'EUR']}
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     # if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
     #     if all(redis_client.hmget('initialized', 'MATICUSDT', 'MATICBNB', 'BNBUSDT')):
@@ -58,23 +67,42 @@ def trading(symbol):
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ['MINAUSDT', 'MINABNB', 'BNBUSDT']:
-        if all(redis_client.hmget('initialized', 'MINAUSDT', 'MINABNB', 'BNBUSDT')):
-            symbol = 'MINAUSDT'
+    # if symbol in ['MINAUSDT', 'MINABNB', 'BNBUSDT']:
+    #     if all(redis_client.hmget('initialized', 'MINAUSDT', 'MINABNB', 'BNBUSDT')):
+    #         symbol = 'MINAUSDT'
+    #         synthetic = {
+    #             'MINABNB': {'normal': True, 'assets': ['MINA', 'BNB']},
+    #             'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+
+    # if symbol in ['OMGUSDT', 'OMGETH', 'ETHUSDT']:
+    #     if all(redis_client.hmget('initialized', 'OMGUSDT', 'OMGETH', 'ETHUSDT')):
+    #         symbol = 'OMGUSDT'
+    #         synthetic = {
+    #             'OMGETH': {'normal': True, 'assets': ['OMG', 'ETH']},
+    #             'ETHUSDT': {'normal': True, 'assets': ['ETH', 'USDT']}
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+
+    if symbol in ['SOLUSDT', 'BNBUSDT', 'SOLBNB']:
+        if all(redis_client.hmget('initialized', 'SOLUSDT', 'BNBUSDT', 'SOLBNB')):
+            symbol = 'SOLUSDT'
             synthetic = {
-                'MINABNB': {'normal': True, 'assets': ['MINA', 'BNB']},
-                'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
+                'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']},
+                'SOLBNB': {'normal': True, 'assets': ['SOL', 'BNB']}
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ['OMGUSDT', 'OMGETH', 'ETHUSDT']:
-        if all(redis_client.hmget('initialized', 'OMGUSDT', 'OMGETH', 'ETHUSDT')):
-            symbol = 'OMGUSDT'
+    if symbol in ['GALAUSDT', 'BNBUSDT', 'GALABNB']:
+        if all(redis_client.hmget('initialized', 'GALAUSDT', 'BNBUSDT', 'GALABNB')):
+            symbol = 'GALAUSDT'
             synthetic = {
-                'OMGETH': {'normal': True, 'assets': ['OMG', 'ETH']},
-                'ETHUSDT': {'normal': True, 'assets': ['ETH', 'USDT']}
+                'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']},
+                'GALABNB': {'normal': True, 'assets': ['GALA', 'BNB']}
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+
 
 
 def get_arbitrage_opportunity():
