@@ -8,7 +8,7 @@ from ..models.order_book import OrderBook
 from ..utils import get_logger, redis_lock
 
 logger = get_logger(__file__)
-redis = get_client(a_sync=False)
+redis = get_client()
 binance = get_binance_client()
 
 

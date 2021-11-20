@@ -8,7 +8,7 @@ import websockets
 from ..clients.redis_client import get_client
 from ..utils import chunks, get_logger
 
-redis = get_client(a_sync=False)
+redis = get_client()
 logger = get_logger(__file__)
 
 

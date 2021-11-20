@@ -5,7 +5,7 @@ from ..clients.redis_client import get_client
 from ..services.sync_order_book_service import SyncOrderBookService
 from ..utils import get_logger
 
-redis = get_client(a_sync=False)
+redis = get_client()
 logger = get_logger(__file__)
 
 

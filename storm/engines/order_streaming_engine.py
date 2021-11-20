@@ -5,7 +5,7 @@ from ..exchanges.binance import WS_URL
 from ..services.stream_symbol_service import stream_symbols
 
 if __name__ == "__main__":
-    redis = get_client(a_sync=False)
+    redis = get_client()
     redis.delete("last_sequences", "cached_responses", "initialized", "responses")
 
     LUNA = set(["LUNAUSDT", "LUNABNB", "BNBUSDT"])
@@ -15,8 +15,5 @@ if __name__ == "__main__":
     MINA = set(["MINAUSDT", "MINABNB", "BNBUSDT"])
     OMG = set(["OMGUSDT", "OMGETH", "ETHUSDT"])
 
-    try:
-        # TODO: use websocket-clients
-        asyncio.run(stream_symbols(WS_URL, LUNA | SAND | MANA | MINA | OMG))
-    except KeyboardInterrupt:
-        pass
+    # TODO: use websocket-clients
+    asyncio.run(stream_symbols(WS_URL, LUNA | SAND | MANA | MINA | OMG))
