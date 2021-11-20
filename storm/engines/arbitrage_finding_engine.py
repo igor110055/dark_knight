@@ -5,6 +5,8 @@ from ..clients.redis_client import get_client
 from ..tasks.order_task import check_arbitrage
 
 
+EXPECTED_RETURN = 0.1
+
 # TODO: parallel computing of each strategy
 def trading(symbol):
     if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
@@ -14,7 +16,7 @@ def trading(symbol):
                 'LUNABNB': {'normal': True, 'assets': ['LUNA', 'BNB']},
                 'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
     
     if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
         if all(redis_client.hmget('initialized', 'LUNAUSDT', 'EURUSDT', 'LUNAEUR')):
@@ -23,24 +25,16 @@ def trading(symbol):
                 'EURUSDT': {'normal': True, 'assets': ['EUR', 'USDT']},
                 'LUNAEUR': {'normal': True, 'assets': ['LUNA', 'EUR']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
-        if all(redis_client.hmget('initialized', 'MATICUSDT', 'MATICBNB', 'BNBUSDT')):
-            symbol = 'MATICUSDT'
-            synthetic = {
-                'MATICBNB': {'normal': True, 'assets': ['MATIC', 'BNB']},
-                'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
-            }
-            check_arbitrage(symbol, synthetic, 0.25)
-
-    # if symbol in ['MATICUSDT', 'MATICTRY', 'USDTTRY']:
-    #     symbol = 'MATICUSDT'
-    #     synthetic = {
-    #         'MATICTRY': {'normal': True},
-    #         'USDTTRY': {'normal': False}
-    #     }
-    #     check_arbitrage(symbol, synthetic, 0)
+    # if symbol in ['MATICUSDT', 'MATICBNB', 'BNBUSDT']:
+    #     if all(redis_client.hmget('initialized', 'MATICUSDT', 'MATICBNB', 'BNBUSDT')):
+    #         symbol = 'MATICUSDT'
+    #         synthetic = {
+    #             'MATICBNB': {'normal': True, 'assets': ['MATIC', 'BNB']},
+    #             'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     if symbol in ['SANDUSDT', 'BNBUSDT', 'SANDBNB']:
         if all(redis_client.hmget('initialized', 'SANDUSDT', 'BNBUSDT', 'SANDBNB')):
@@ -49,7 +43,7 @@ def trading(symbol):
                 'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']},
                 'SANDBNB': {'normal': True, 'assets': ['SAND', 'BNB']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     if symbol in ['MANAUSDT', 'MANAETH', 'ETHUSDT']:
         if all(redis_client.hmget('initialized', 'MANAUSDT', 'MANAETH', 'ETHUSDT')):
@@ -58,7 +52,7 @@ def trading(symbol):
                 'MANAETH': {'normal': True, 'assets': ['MANA', 'ETH']},
                 'ETHUSDT': {'normal': True, 'assets': ['ETH', 'USDT']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     if symbol in ['MINAUSDT', 'MINABNB', 'BNBUSDT']:
         if all(redis_client.hmget('initialized', 'MINAUSDT', 'MINABNB', 'BNBUSDT')):
@@ -67,7 +61,7 @@ def trading(symbol):
                 'MINABNB': {'normal': True, 'assets': ['MINA', 'BNB']},
                 'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     if symbol in ['OMGUSDT', 'OMGETH', 'ETHUSDT']:
         if all(redis_client.hmget('initialized', 'OMGUSDT', 'OMGETH', 'ETHUSDT')):
@@ -76,7 +70,7 @@ def trading(symbol):
                 'OMGETH': {'normal': True, 'assets': ['OMG', 'ETH']},
                 'ETHUSDT': {'normal': True, 'assets': ['ETH', 'USDT']}
             }
-            check_arbitrage(symbol, synthetic, 0.25)
+            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
 
 def get_arbitrage_opportunity():

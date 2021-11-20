@@ -1,0 +1,7 @@
+FROM storm:base
+
+COPY . .
+
+RUN pip install .
+
+ENTRYPOINT ["python"]

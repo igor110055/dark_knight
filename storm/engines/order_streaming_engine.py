@@ -15,13 +15,8 @@ if __name__ == '__main__':
     MINA = set(['MINAUSDT', 'MINABNB', 'BNBUSDT'])
     OMG = set(['OMGUSDT', 'OMGETH', 'ETHUSDT'])
 
-    # TODO: change ws library to remove async (buggy...)
-
-    # loop = asyncio.get_event_loop()
-    # task = loop.create_task(stream_symbols(WS_URL, LUNA | MATIC | SAND))
-
-    # Thread(target=asyncio.run, args=(stream_symbols(WS_URL, LUNA | MATIC | SAND), )).start()
     try:
+        # TODO: use websocket-clients
         asyncio.run(stream_symbols(WS_URL, LUNA | SAND | MANA | MINA | OMG))
     except KeyboardInterrupt:
         pass
