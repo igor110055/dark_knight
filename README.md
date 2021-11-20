@@ -75,7 +75,7 @@ Setup crontab
 ```
 crontab -e
 
-* * * * * conda activate dark_knight && python -m processes.record_arbitrage
+* * * * * cd ~/develop/dark_knight && ~/miniconda3/envs/dark_knight/bin/python processes/record_arbitrage.py >> ~/cronjob.log 2>&1
 ```
 
 ref: https://www.digitalocean.com/community/tutorials/how-to-use-cron-to-automate-tasks-ubuntu-1804
