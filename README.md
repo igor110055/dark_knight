@@ -61,3 +61,21 @@ python -m storm.engines.arbitrage_finding_engine
 
 ## Development setup
 1. Install redis and copy the `redis.conf` to `/etc/redis/redis.conf`
+
+
+## Cronjob
+
+Install cronjob
+```
+sudo apt install cron
+sudo systemctl enable cron
+```
+
+Setup crontab
+```
+crontab -e
+
+* * * * * conda activate dark_knight && python -m processes.record_arbitrage
+```
+
+ref: https://www.digitalocean.com/community/tutorials/how-to-use-cron-to-automate-tasks-ubuntu-1804
