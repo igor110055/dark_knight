@@ -4,17 +4,17 @@ import csv
 SYMBOLS = {}
 
 
-def load_symbols(file_path='symbols.csv'):
+def load_symbols(file_path="symbols.csv"):
     if SYMBOLS:
         return SYMBOLS
 
     with open(file_path) as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
-            if row['status'] != 'TRADING':
+            if row["status"] != "TRADING":
                 continue
 
-            SYMBOLS[row['symbol']] = [row['baseAsset'], row['quoteAsset']]
+            SYMBOLS[row["symbol"]] = [row["baseAsset"], row["quoteAsset"]]
 
         return SYMBOLS
 

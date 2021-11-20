@@ -1,10 +1,11 @@
-from .base import Base
-from sqlalchemy import Column, Integer, String, Numeric, DateTime
+from sqlalchemy import Column, Integer, Numeric, String
 from sqlalchemy.orm import relationship
+
+from .base import Base
 
 
 class Order(Base):
-    __tablename__ = 'orders'
+    __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
     group_id = Column(String, index=True)
@@ -19,4 +20,4 @@ class Order(Base):
     status = Column(String)  # TODO: enum
     transacted_at = Column(Integer)
 
-    fills = relationship('Fill', back_populates='order')
+    fills = relationship("Fill", back_populates="order")

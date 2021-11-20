@@ -11,23 +11,26 @@ redis = get_client(9)
 
 
 def get_order_book_update(symbols):
-    Thread(target=asyncio.run, args=(stream_symbols(
-        WS_URL, symbols, redis=redis), ), daemon=True).start()
+    Thread(
+        target=asyncio.run,
+        args=(stream_symbols(WS_URL, symbols, redis=redis),),
+        daemon=True,
+    ).start()
 
 
 @pytest.mark.skip
 def test_receive_order_book_update():
     redis.flushdb()
-    assert not redis.lrange('responses', 0, 10)
+    assert not redis.lrange("responses", 0, 10)
 
-    symbols = ['LUNAUSDT']
+    symbols = ["LUNAUSDT"]
 
     get_order_book_update(symbols)
 
     while True:
-        if not redis.lrange('responses', 0, 10):
+        if not redis.lrange("responses", 0, 10):
             sleep(0.1)
             continue
         break
 
-    assert redis.lrange('responses', 0, 10)
+    assert redis.lrange("responses", 0, 10)

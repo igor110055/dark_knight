@@ -1,13 +1,17 @@
-from time import sleep
 from multiprocessing import Process
+from time import sleep
 
 from ..clients.redis_client import get_client
 from ..tasks.order_task import check_arbitrage
+from ..utils import get_logger
 
+logger = get_logger(__file__)
 
 EXPECTED_RETURN = 0.1
 
 # TODO: parallel computing of each strategy
+
+
 def trading(symbol):
     if symbol in ['LUNAUSDT', 'LUNABNB', 'BNBUSDT']:
         if all(redis_client.hmget('initialized', 'LUNAUSDT', 'LUNABNB', 'BNBUSDT')):
@@ -17,7 +21,7 @@ def trading(symbol):
                 'BNBUSDT': {'normal': True, 'assets': ['BNB', 'USDT']}
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
-    
+
     if symbol in ['LUNAUSDT', 'EURUSDT', 'LUNAEUR']:
         if all(redis_client.hmget('initialized', 'LUNAUSDT', 'EURUSDT', 'LUNAEUR')):
             symbol = 'LUNAUSDT'
@@ -79,6 +83,7 @@ def get_arbitrage_opportunity():
     while True:
         # TODO: separate into different list of symbols, use brpop
         if (symbol := redis_client.brpop('updated_best_prices', 0.001)):
+            logger.info(f'Checking arbitrage for {symbol[1]}')
             trading(symbol[1])
         else:
             sleep(0.001)
@@ -89,7 +94,7 @@ if __name__ == '__main__':
     redis_client.delete('updated_best_prices')
     redis_client.set('trade_count', 0)
 
-    print('start arbitrage')
+    logger.info('start arbitrage')
 
     for _ in range(4):
         Process(target=get_arbitrage_opportunity).start()
@@ -97,4 +102,3 @@ if __name__ == '__main__':
     # get_arbitrage_opportunity()
 
     # TODO: use psubscribe to capture symbol and updated timestamp
-

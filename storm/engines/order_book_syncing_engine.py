@@ -1,5 +1,6 @@
 from multiprocessing import Process
 from time import sleep
+
 from ..clients.redis_client import get_client
 from ..services.sync_order_book_service import SyncOrderBookService
 from ..utils import get_logger
@@ -12,7 +13,7 @@ def main():
     service = SyncOrderBookService()
 
     while True:
-        response = redis.brpop('responses', 0.001)
+        response = redis.brpop("responses", 0.001)
         if response:
             service.update_order_book(response[1])
         else:
@@ -22,9 +23,9 @@ def main():
         # TODO: fix zmq connection in process, use ProcessPool
 
 
-if __name__ == '__main__':
-    logger.info('Ready to handle order book update')
-    redis.delete('responses')
+if __name__ == "__main__":
+    logger.info("Ready to handle order book update")
+    redis.delete("responses")
 
     for _ in range(6):
         Process(target=main).start()

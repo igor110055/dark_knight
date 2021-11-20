@@ -22,23 +22,29 @@ class OrderBook:
 
     def save(self, book):
         self.redis.delete(self.bids_key, self.asks_key)
-        self.redis.hmset(self.bids_key, book['bids'])
-        self.redis.hmset(self.asks_key, book['asks'])
+        self.redis.hmset(self.bids_key, book["bids"])
+        self.redis.hmset(self.asks_key, book["asks"])
 
     def get_book(self):
         return {
-            'bids': {float(price): amount for price, amount in self.redis.hgetall(self.bids_key).items()},
-            'asks': {float(price): amount for price, amount in self.redis.hgetall(self.asks_key).items()}
+            "bids": {
+                float(price): amount
+                for price, amount in self.redis.hgetall(self.bids_key).items()
+            },
+            "asks": {
+                float(price): amount
+                for price, amount in self.redis.hgetall(self.asks_key).items()
+            },
         }
 
     # Important: for arbitrage
     @property
     def best_prices(self):
-        prices = self.redis.get(f'best_orders:{self.symbol}')
+        prices = self.redis.get(f"best_orders:{self.symbol}")
         if not prices:
             return None
         return json.loads(prices)
 
     @best_prices.setter
     def best_prices(self, best_prices):
-        self.redis.set(f'best_orders:{self.symbol}', json.dumps(best_prices), 1)
+        self.redis.set(f"best_orders:{self.symbol}", json.dumps(best_prices), 1)

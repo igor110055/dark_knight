@@ -6,7 +6,7 @@ from setuptools import setup
 #     requirements = parse_requirements(requirements_text.read())
 
 setup(
-    name='Storm',
-    packages=['storm'],
+    name="Storm",
+    packages=["storm"],
     # install_requires=[str(r) for r in requirements]
 )

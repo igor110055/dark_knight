@@ -13,7 +13,10 @@ def test_redis_lock__multiprocessing():
 
     processes = []
     for _ in range(10):
-        process = Process(target=racing_condition, args=(executed, exited, lambda: current_process().pid))
+        process = Process(
+            target=racing_condition,
+            args=(executed, exited, lambda: current_process().pid),
+        )
         processes.append(process)
         process.start()
 
@@ -31,7 +34,9 @@ def test_redis_lock__threading():
 
     threads = []
     for _ in range(10):
-        thread = Thread(target=racing_condition, args=(executed, exited, current_thread))
+        thread = Thread(
+            target=racing_condition, args=(executed, exited, current_thread)
+        )
         threads.append(thread)
         thread.start()
 
@@ -45,7 +50,7 @@ def test_redis_lock__threading():
 
 def racing_condition(executed, exited, func):
     redis = get_client()
-    with redis_lock(redis, 'test_lock') as lock:
+    with redis_lock(redis, "test_lock") as lock:
         if lock.lock_acquired:
             sleep(1)  # workload
             executed.append(func())

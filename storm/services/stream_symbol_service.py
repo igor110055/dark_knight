@@ -4,6 +4,7 @@ from typing import List
 
 import simplejson as json
 import websockets
+
 from ..clients.redis_client import get_client
 from ..utils import chunks, get_logger
 
@@ -11,7 +12,13 @@ redis = get_client(a_sync=False)
 logger = get_logger(__file__)
 
 
-async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(1, 99), timeout: int = 60*15, redis = redis) -> None:
+async def stream_symbols(
+    url: str,
+    symbols: List[str],
+    stream_id: int = randint(1, 99),
+    timeout: int = 60 * 15,
+    redis=redis,
+) -> None:
     """Stream symbols update from websocket, and cache into redis
 
     Args:
@@ -27,30 +34,29 @@ async def stream_symbols(url: str, symbols: List[str], stream_id: int = randint(
         for symbol in symbols:
             payload = {
                 "method": "SUBSCRIBE",
-                'params': [f'{symbol.lower()}@depth@100ms'],
-                "id": stream_id
+                "params": [f"{symbol.lower()}@depth@100ms"],
+                "id": stream_id,
             }
             await websocket.send(json.dumps(payload))
 
             # ack
             # message = await websocket.recv()
 
-            while not redis.hget('initialized', symbol):
+            while not redis.hget("initialized", symbol):
                 message = await websocket.recv()
-                if 'result' in message:
+                if "result" in message:
                     continue
-                logger.info(
-                    f'websocket update received on {message[19:52]} ...')
-                redis.lpush('responses', message)
+                logger.info(f"websocket update received on {message[19:52]} ...")
+                redis.lpush("responses", message)
 
         async for message in websocket:
-            if 'result' in message:
+            if "result" in message:
                 continue
-            logger.info(f'websocket update received on {message[19:52]} ...')
-            redis.lpush('responses', message)
+            logger.info(f"websocket update received on {message[19:52]} ...")
+            redis.lpush("responses", message)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from ..exchanges.binance import WS_URL
     from ..helpers.triangular_finder import get_symbols
 
