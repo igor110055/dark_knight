@@ -5,7 +5,7 @@ import simplejson as json
 import websocket
 
 from ..clients.redis_client import get_client
-from ..exchanges.binance import get_client as get_binance
+from ..exchanges.binance import get_order_book
 from ..utils import get_logger
 
 # websocket.enableTrace(True)
@@ -15,7 +15,6 @@ WEBSOCKETS = dict()
 STOP_EVENTS = dict()
 
 WS_URL = "wss://stream.binance.com:9443/ws"
-binance = get_binance()
 
 
 def on_message(ws, message):
@@ -105,7 +104,7 @@ if __name__ == "__main__":
                 logger.info("getting symbol...")
                 time.sleep(0.1)
                 if time.time() - start > 1:
-                    snapshot = json.dumps(binance.get_order_book(data["symbol"]))
+                    snapshot = json.dumps(get_order_book(data["symbol"]))
                     break
 
             redis.hset("snapshots", symbol, snapshot)

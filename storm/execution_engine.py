@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from .exchanges.binance import get_client
+from .exchanges.binance import get_client, get_min_quantity
 from .utils import get_logger
 
 logger = get_logger(__file__)
@@ -8,7 +8,7 @@ client = get_client(True)
 
 
 def convert_to_base_amount(symbol, price, quote_amount):
-    min_amount = Decimal(client.get_min_quantity(symbol))
+    min_amount = Decimal(get_min_quantity(symbol))
     absolute_base_amount = Decimal(price) / Decimal(quote_amount)
     return absolute_base_amount // min_amount * min_amount
 

@@ -3,20 +3,18 @@ from time import sleep
 import simplejson as json
 
 from ..clients.redis_client import get_client
-from ..exchanges.binance import get_client as get_binance_client
+from ..exchanges.binance import get_order_book
 from ..models.order_book import OrderBook
 from ..utils import get_logger, redis_lock
 
 logger = get_logger(__file__)
 redis = get_client()
-binance = get_binance_client()
 
 
 class SyncOrderBookService:
-    def __init__(self, redis=redis, binance=binance):
+    def __init__(self, redis=redis):
         self.redis = redis
         self.subscriber = redis.pubsub()
-        self.binance = binance
 
     # TODO: check passing string or retrieve from redis faster
     def update_order_book(self, message: str, from_cache=False, last_sequence=None):
@@ -119,7 +117,7 @@ class SyncOrderBookService:
 
     def get_order_book_snapshot(self, symbol, sync=False):
         if sync:
-            data = binance.get_order_book(symbol)
+            data = get_order_book(symbol)
         else:
             self.redis.publish(
                 "order_book_websocket",
