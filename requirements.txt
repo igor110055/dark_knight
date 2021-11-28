@@ -9,6 +9,7 @@ websocket-client
 hiredis
 aioredis
 sqlalchemy
+rq
 
 # dev
 pytest
