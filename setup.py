@@ -7,6 +7,13 @@ from setuptools import setup
 
 setup(
     name="Storm",
-    packages=["storm", "storm.engines", "storm.services", "storm.models"],
+    packages=[
+        "storm",
+        "storm.engines",
+        "storm.services",
+        "storm.models",
+        "storm.clients",
+        "storm.exchanges",
+    ],
     # install_requires=[str(r) for r in requirements]
 )
