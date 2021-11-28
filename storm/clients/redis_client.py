@@ -10,7 +10,7 @@ redis_pool = redis.ConnectionPool(
 # redis_pool = redis.ConnectionPool.from_url('unix:///var/run/redis/redis.sock', decode_responses=True)
 
 
-def get_client(db=0):
-    return redis.Redis(host=redis_host, db=db, decode_responses=True, health_check_interval=20)
+def get_client(db=0, decode_responses=True):
+    return redis.Redis(host=redis_host, db=db, decode_responses=decode_responses, health_check_interval=20)
     # return FRedis(unix_socket_path='/run/redis/redis.sock', db=db, decode_responses=True)
     # return FRedis(connection_pool=redis_pool)
