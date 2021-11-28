@@ -15,7 +15,7 @@ services:
         environment:  # TODO: remove binance if unnecessary
             - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
             - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
-        command: -m storm.engines.order_book_snapshot_engine
+        command: python -m storm.engines.order_book_snapshot_engine
 
     order-book-syncing-engine:
         image: storm:engine
@@ -27,7 +27,7 @@ services:
         environment:
             - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
             - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
-        command: -m storm.engines.order_book_syncing_engine
+        command: python -m storm.engines.order_book_syncing_engine
 
     order-streaming-engine:
         image: storm:engine
@@ -38,7 +38,7 @@ services:
         environment:
             - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
             - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
-        command: -m storm.engines.order_streaming_engine
+        command: python -m storm.engines.order_streaming_engine
 
     arbitrage-finding-engine:
         image: storm:engine
@@ -54,4 +54,19 @@ services:
             - ./arbitrage.log:/usr/src/app/arbitrage.log
             - ./arbitrage.csv:/usr/src/app/arbitrage.csv
             - ./storm.db:/usr/src/app/storm.db
-        command: -m storm.engines.arbitrage_finding_engine
+        command: python -m storm.engines.arbitrage_finding_engine
+
+    redis-queue:
+        image: storm:engine
+        build:
+            context: .
+            dockerfile: ./docker/Dockerfile.engine
+        network_mode: host
+        environment:
+            - API_KEY=owLxYrLQ3kbYiWh0sHeOqZPAJ99RD6Gakf5cDQwpJD2E1pmcYA4TZVUimwQZ8fGX
+            - SECRET_KEY=QKT7Si9FGK0ugom6yb8EIHA4w17ORDMHrt2IfRcInezSAGH4Q2dPownCc6dtcecj
+        volumes:
+            - ./arbitrage.log:/usr/src/app/arbitrage.log
+            - ./arbitrage.csv:/usr/src/app/arbitrage.csv
+            - ./storm.db:/usr/src/app/storm.db
+        command: rq worker -c settings

@@ -15,13 +15,18 @@ WS_URL = "wss://stream.binance.com:9443/ws"
 session = get_session(REST_URL)
 
 
+def get_client(init_symbols=False):
+    return Binance()
+
+
 class Binance:
-    def create_order(self, side, order_type, symbol, quantity, on_quote=False):
+    def create_market_order(self, side, order_type, symbol, quantity, on_quote=False):
         timestamp = int(time.time() * 1000)
         data = {
             "symbol": symbol,
             "side": side,
             "type": order_type,
+            "timeInForce": "FOK",
             "timestamp": timestamp,
         }
         if on_quote:
@@ -35,7 +40,7 @@ class Binance:
         params = {
             "symbol": symbol,
             "orderId": order_id,
-            "recvWindow": 5000,
+            "recvWindow": 1000,
             "timestamp": timestamp,
         }
 
@@ -45,6 +50,21 @@ class Binance:
         return get("api/v3/exchangeInfo")
 
 
+@allow_async
+def create_limit_order(side, symbol, price, quantity):
+    timestamp = int(time.time() * 1000)
+    data = {
+        "symbol": symbol,
+        "side": side,
+        "type": "LIMIT",
+        "price": price,
+        "quantity": quantity,
+        "timeInForce": "FOK",
+        "timestamp": timestamp,
+    }
+    return post("api/v3/order", data)
+
+
 @lru_cache
 def get_min_quantity(symbol):
     if not (symbol := SYMBOLS.get(symbol)):
@@ -52,10 +72,6 @@ def get_min_quantity(symbol):
     for filter in eval(symbol["filters"]):
         if filter["filterType"] == "LOT_SIZE":
             return filter["minQty"].rstrip("0")
-
-
-def get_client(init_symbols=False):
-    return Binance(init_symbols)
 
 
 @allow_async
@@ -75,7 +91,7 @@ def get_orders(symbol, limit=100):
     params = {
         "symbol": symbol,
         "limit": limit,
-        "recvWindow": 5000,
+        "recvWindow": 1000,
         "timestamp": timestamp,
     }
 
@@ -85,7 +101,7 @@ def get_orders(symbol, limit=100):
 @allow_async
 def get_balances():
     timestamp = int(time.time() * 1000)
-    params = {"recvWindow": 5000, "timestamp": timestamp}
+    params = {"recvWindow": 1000, "timestamp": timestamp}
 
     data = get("api/v3/account", params)
     balances = {

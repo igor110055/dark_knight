@@ -73,24 +73,24 @@ class OrderEngine:
                 if left_normal:
 
                     def post_left_synthetic_order(quote_quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "SELL", "MARKET", left_symbol, quote_quantity, on_quote=True
                         )
 
                 else:
 
                     def post_left_synthetic_order(quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "BUY", "MARKET", left_symbol, quantity
                         )
 
             else:
                 if left_normal:
-                    left_order = self.client.create_order(
+                    left_order = self.client.create_market_order(
                         "SELL", "MARKET", left_symbol, natural_amount
                     )
                 else:
-                    left_order = self.client.create_order(
+                    left_order = self.client.create_market_order(
                         "BUY", "MARKET", left_symbol, natural_amount, on_quote=True
                     )
 
@@ -101,7 +101,7 @@ class OrderEngine:
                 if right_normal:
 
                     def post_right_synthetic_order(quote_quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "SELL",
                             "MARKET",
                             right_symbol,
@@ -112,17 +112,17 @@ class OrderEngine:
                 else:
 
                     def post_right_synthetic_order(quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "BUY", "MARKET", right_symbol, quantity
                         )
 
             else:
                 if right_normal:
-                    right_order = self.client.create_order(
+                    right_order = self.client.create_market_order(
                         "SELL", "MARKET", right_symbol, natural_amount
                     )
                 else:
-                    right_order = self.client.create_order(
+                    right_order = self.client.create_market_order(
                         "BUY", "MARKET", right_symbol, natural_amount, on_quote=True
                     )
 
@@ -268,7 +268,7 @@ class OrderEngine:
 
                     # post_left_synthetic_order = lambda quote_quantity:self.client.create_market_buy_order(left_symbol, None, params={'quoteOrderQty': quote_quantity})
                     def post_left_synthetic_order(quote_quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "BUY", "MARKET", left_symbol, quote_quantity, on_quote=True
                         )
 
@@ -287,7 +287,7 @@ class OrderEngine:
                     # left_synthetic_ask = 1 / bid
 
                     def post_left_synthetic_order(quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "SELL", "MARKET", left_symbol, quantity
                         )
 
@@ -324,7 +324,7 @@ class OrderEngine:
                 if right_normal:
 
                     def post_right_synthetic_order(quote_quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "BUY", "MARKET", right_symbol, quote_quantity, on_quote=True
                         )
 
@@ -345,7 +345,7 @@ class OrderEngine:
                     # right_synthetic_ask_amount = best_prices_right['bid'][1]
 
                     def post_right_synthetic_order(quantity):
-                        return self.client.create_order(
+                        return self.client.create_market_order(
                             "SELL", "MARKET", right_symbol, quantity
                         )
 
@@ -384,7 +384,7 @@ class OrderEngine:
                 )
                 return False
 
-            natural_order = self.client.create_order(
+            natural_order = self.client.create_market_order(
                 "SELL",
                 "MARKET",
                 natural,
