@@ -18,6 +18,7 @@ def record_arbitrages():
         session.query(Order.group_id)
         .distinct(Order.group_id)
         .filter(Order.group_id.not_in(existing_arbitrage_group_ids))
+        .order_by(Order.id)
     )
 
     count = 0

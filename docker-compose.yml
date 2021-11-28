@@ -19,6 +19,7 @@ services:
 
     order-book-syncing-engine:
         image: storm:engine
+        restart: on-failure
         build:
             context: .
             dockerfile: ./docker/Dockerfile.engine

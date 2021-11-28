@@ -7,7 +7,7 @@ from ..utils import get_logger
 
 logger = get_logger(__file__)
 
-EXPECTED_RETURN = 0.3
+EXPECTED_RETURN = 0.25
 
 # TODO: parallel computing of each strategy
 
@@ -94,14 +94,14 @@ def trading(symbol):
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ["GALAUSDT", "BNBUSDT", "GALABNB"]:
-        if all(redis_client.hmget("initialized", "GALAUSDT", "BNBUSDT", "GALABNB")):
-            symbol = "GALAUSDT"
-            synthetic = {
-                "BNBUSDT": {"normal": True, "assets": ["BNB", "USDT"]},
-                "GALABNB": {"normal": True, "assets": ["GALA", "BNB"]},
-            }
-            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+    # if symbol in ["GALAUSDT", "BNBUSDT", "GALABNB"]:
+    #     if all(redis_client.hmget("initialized", "GALAUSDT", "BNBUSDT", "GALABNB")):
+    #         symbol = "GALAUSDT"
+    #         synthetic = {
+    #             "BNBUSDT": {"normal": True, "assets": ["BNB", "USDT"]},
+    #             "GALABNB": {"normal": True, "assets": ["GALA", "BNB"]},
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
 
 def get_arbitrage_opportunity():
