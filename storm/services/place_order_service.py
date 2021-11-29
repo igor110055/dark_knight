@@ -2,13 +2,13 @@ from decimal import Decimal
 from time import time
 
 from ..clients.redis_client import get_client
-from ..execution_engine import first_triangle_order
+from ..execution_engine import first_triangle_order, truncate_base_quantity
 from ..models.session import get_session
 from ..utils import get_logger
 from .save_arbitrage_orders_service import SaveArbitrageOrdersService
 
 logger = get_logger(__file__)
-redis = get_client()
+redis = get_client()  # TODO: move into class
 
 
 class OrderEngine:
@@ -26,11 +26,6 @@ class OrderEngine:
             currency[-4:] == self.trading_currency
             or currency[-4:] == self.trading_currency
         )
-
-    def convert_to_base_amount(self, symbol, price, quote_amount):
-        min_amount = Decimal(self.client.market(symbol)["limits"]["amount"]["min"])
-        absolute_base_amount = Decimal(price) / Decimal(quote_amount)
-        return absolute_base_amount // min_amount * min_amount
 
     def buy_natural_sell_synthetic(
         self,
@@ -57,6 +52,7 @@ class OrderEngine:
                 logger.info(f"Cannot trade {natural}, {left_symbol}, {right_symbol}")
                 return False
 
+            # limit order
             natural_order, natural_amount = first_triangle_order(
                 self.trading_currency,
                 self.trading_amount,
@@ -65,96 +61,80 @@ class OrderEngine:
                 natural_best_prices,
             )  # TODO: a service to get symbol assets
 
-            left_order = None
-            post_left_synthetic_order = None
+            if natural_order["status"] == "EXPIRED":
+                logger.info(f"Order expired, natural {natural}, synthetic {synthetic}")
+                return False
 
+            if "code" in natural_order:
+                logger.info(
+                    f"Natural order raise error {natural_order}, natural {natural}, synthetic {synthetic}"
+                )
+                return False
+
+            if left_normal:
+                left_trade_side = "SELL"
+                left_on_quote = False
+            else:
+                left_trade_side = "BUY"
+                left_on_quote = True
+
+            if right_normal:
+                right_trade_side = "SELL"
+                right_on_quote = False
+            else:
+                right_trade_side = "BUY"
+                right_on_quote = True
+
+            # last trade to convert back to USDT
             if self.trading_currency in left_assets:
-                # last trade to convert back to USDT
-                if left_normal:
+                right_order = self.client.create_market_order(
+                    right_trade_side,
+                    "MARKET",
+                    right_symbol,
+                    natural_amount,
+                    on_quote=right_on_quote,
+                )
 
-                    def post_left_synthetic_order(quote_quantity):
-                        return self.client.create_market_order(
-                            "SELL", "MARKET", left_symbol, quote_quantity, on_quote=True
-                        )
-
-                else:
-
-                    def post_left_synthetic_order(quantity):
-                        return self.client.create_market_order(
-                            "BUY", "MARKET", left_symbol, quantity
-                        )
-
-            else:
-                if left_normal:
-                    left_order = self.client.create_market_order(
-                        "SELL", "MARKET", left_symbol, natural_amount
-                    )
-                else:
-                    left_order = self.client.create_market_order(
-                        "BUY", "MARKET", left_symbol, natural_amount, on_quote=True
-                    )
-
-            right_order = None
-            post_right_synthetic_order = None
-
-            if self.trading_currency in right_assets:
                 if right_normal:
-
-                    def post_right_synthetic_order(quote_quantity):
-                        return self.client.create_market_order(
-                            "SELL",
-                            "MARKET",
-                            right_symbol,
-                            quote_quantity,
-                            on_quote=True,
-                        )
-
+                    left_origin_quantity_key = "cummulativeQuoteQty"
                 else:
+                    left_origin_quantity_key = "executedQty"
 
-                    def post_right_synthetic_order(quantity):
-                        return self.client.create_market_order(
-                            "BUY", "MARKET", right_symbol, quantity
-                        )
+                left_amount = truncate_base_quantity(
+                    left_symbol, Decimal(right_order[left_origin_quantity_key])
+                )
+                left_order = self.client.create_market_order(
+                    left_trade_side,
+                    "MARKET",
+                    left_symbol,
+                    left_amount,
+                    on_quote=left_on_quote,
+                )
 
             else:
-                if right_normal:
-                    right_order = self.client.create_market_order(
-                        "SELL", "MARKET", right_symbol, natural_amount
-                    )
+                left_order = self.client.create_market_order(
+                    left_trade_side,
+                    "MARKET",
+                    left_symbol,
+                    natural_amount,
+                    on_quote=left_on_quote,
+                )
+
+                if left_normal:
+                    right_origin_quantity_key = "cummulativeQuoteQty"
                 else:
-                    right_order = self.client.create_market_order(
-                        "BUY", "MARKET", right_symbol, natural_amount, on_quote=True
-                    )
+                    right_origin_quantity_key = "executedQty"
 
-            first_order = left_order or right_order
-
-            if "code" in first_order:
-                logger.error(
-                    f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on first order {first_order}"
+                right_amount = truncate_base_quantity(
+                    right_symbol, Decimal(left_order[right_origin_quantity_key])
                 )
-                return False
-
-            second_order = None
-            if left_order:
-                # amount = Decimal(left_order['amount'])
-                # if left_normal:
-                #     amount *= Decimal('0.999')
-                second_order = right_order = post_right_synthetic_order(
-                    self.trading_amount * Decimal("0.99")
+                right_order = self.client.create_market_order(
+                    right_trade_side,
+                    "MARKET",
+                    right_symbol,
+                    right_amount,
+                    on_quote=right_on_quote,
                 )
-            else:
-                # amount = Decimal(right_order['amount'])
-                # if right_normal:
-                #     amount *= Decimal('0.999')
-                second_order = left_order = post_left_synthetic_order(
-                    self.trading_amount * Decimal("0.99")
-                )
-
-            if "code" in second_order:
-                logger.error(
-                    f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on second order: {second_order}, first_order: {first_order}, natural_order: {natural_order}"
-                )
-                return False
 
             logger.info(
                 f"Triangular arbitrage natural {natural}: {natural_order}, synthetic {synthetic}: {left_order}, {right_order}"
@@ -168,7 +148,7 @@ class OrderEngine:
 
             try:
                 self.save_arbitrage_orders_service.execute(
-                    natural_order, first_order, second_order
+                    natural_order, left_order, right_order
                 )
             except Exception as error:
                 logger.error(f"Save arbitrage orders raised error {error}")
@@ -191,6 +171,7 @@ class OrderEngine:
     def buy_synthetic_sell_natural(
         self, natural, synthetic, best_prices_left, best_prices_right, delay=300
     ):
+        return
         natural_order = None
         first_order = None
         second_order = None
@@ -269,7 +250,7 @@ class OrderEngine:
                     # post_left_synthetic_order = lambda quote_quantity:self.client.create_market_buy_order(left_symbol, None, params={'quoteOrderQty': quote_quantity})
                     def post_left_synthetic_order(quote_quantity):
                         return self.client.create_market_order(
-                            "BUY", "MARKET", left_symbol, quote_quantity, on_quote=True
+                            "BUY", "MARKET", left_symbol, quote_quantity
                         )
 
                 else:
@@ -325,7 +306,7 @@ class OrderEngine:
 
                     def post_right_synthetic_order(quote_quantity):
                         return self.client.create_market_order(
-                            "BUY", "MARKET", right_symbol, quote_quantity, on_quote=True
+                            "BUY", "MARKET", right_symbol, quote_quantity
                         )
 
                     # right_synthetic_ask = best_prices_right['ask'][0]
@@ -360,11 +341,11 @@ class OrderEngine:
 
             first_order = left_order or right_order
 
-            if "code" in first_order:
-                logger.error(
-                    f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on first order {first_order}"
-                )
-                return False
+            # if "code" in first_order:
+            #     logger.error(
+            #         f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on first order {first_order}"
+            #     )
+            #     return False
 
             second_order = None
             if left_order:
@@ -378,18 +359,14 @@ class OrderEngine:
                 #     amount *= Decimal('0.999')
                 second_order = post_left_synthetic_order(amount)
 
-            if "code" in second_order:
-                logger.error(
-                    f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on second order: {second_order}, first_order: {first_order}"
-                )
-                return False
+            # if "code" in second_order:
+            #     logger.error(
+            #         f"Triangular arbitrage natural: {natural}, synthetic: {synthetic} failed on second order: {second_order}, first_order: {first_order}"
+            #     )
+            #     return False
 
             natural_order = self.client.create_market_order(
-                "SELL",
-                "MARKET",
-                natural,
-                self.trading_amount * Decimal("0.99"),
-                on_quote=True,
+                "SELL", "MARKET", natural, self.trading_amount
             )
 
             logger.info(
@@ -404,7 +381,7 @@ class OrderEngine:
 
             try:
                 self.save_arbitrage_orders_service.execute(
-                    natural_order, first_order, second_order
+                    natural_order, first_order.result, second_order
                 )
             except Exception as error:
                 logger.error(f"Save arbitrage orders raised error {error}")

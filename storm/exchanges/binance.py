@@ -26,7 +26,6 @@ class Binance:
             "symbol": symbol,
             "side": side,
             "type": order_type,
-            "timeInForce": "FOK",
             "timestamp": timestamp,
         }
         if on_quote:
