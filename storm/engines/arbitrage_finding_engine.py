@@ -10,7 +10,7 @@ logger = get_logger(__file__)
 EXPECTED_RETURN = 0.25
 
 # TODO: parallel computing of each strategy
-
+# TODO: redis pubsub to receive update noti
 
 def trading(symbol):
     if symbol in ["ETHUSDT", "BNBETH", "BNBUSDT"]:
@@ -58,14 +58,14 @@ def trading(symbol):
             }
             check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ["MANAUSDT", "MANAETH", "ETHUSDT"]:
-        if all(redis_client.hmget("initialized", "MANAUSDT", "MANAETH", "ETHUSDT")):
-            symbol = "MANAUSDT"
-            synthetic = {
-                "MANAETH": {"normal": True, "assets": ["MANA", "ETH"]},
-                "ETHUSDT": {"normal": True, "assets": ["ETH", "USDT"]},
-            }
-            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+    # if symbol in ["MANAUSDT", "MANAETH", "ETHUSDT"]:
+    #     if all(redis_client.hmget("initialized", "MANAUSDT", "MANAETH", "ETHUSDT")):
+    #         symbol = "MANAUSDT"
+    #         synthetic = {
+    #             "MANAETH": {"normal": True, "assets": ["MANA", "ETH"]},
+    #             "ETHUSDT": {"normal": True, "assets": ["ETH", "USDT"]},
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     # if symbol in ['MINAUSDT', 'MINABNB', 'BNBUSDT']:
     #     if all(redis_client.hmget('initialized', 'MINAUSDT', 'MINABNB', 'BNBUSDT')):
@@ -85,14 +85,14 @@ def trading(symbol):
     #         }
     #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
-    if symbol in ["SOLUSDT", "BNBUSDT", "SOLBNB"]:
-        if all(redis_client.hmget("initialized", "SOLUSDT", "BNBUSDT", "SOLBNB")):
-            symbol = "SOLUSDT"
-            synthetic = {
-                "BNBUSDT": {"normal": True, "assets": ["BNB", "USDT"]},
-                "SOLBNB": {"normal": True, "assets": ["SOL", "BNB"]},
-            }
-            check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
+    # if symbol in ["SOLUSDT", "BNBUSDT", "SOLBNB"]:
+    #     if all(redis_client.hmget("initialized", "SOLUSDT", "BNBUSDT", "SOLBNB")):
+    #         symbol = "SOLUSDT"
+    #         synthetic = {
+    #             "BNBUSDT": {"normal": True, "assets": ["BNB", "USDT"]},
+    #             "SOLBNB": {"normal": True, "assets": ["SOL", "BNB"]},
+    #         }
+    #         check_arbitrage(symbol, synthetic, EXPECTED_RETURN)
 
     # if symbol in ["GALAUSDT", "BNBUSDT", "GALABNB"]:
     #     if all(redis_client.hmget("initialized", "GALAUSDT", "BNBUSDT", "GALABNB")):
@@ -109,8 +109,7 @@ def get_arbitrage_opportunity():
 
     while True:
         # TODO: separate into different list of symbols, use brpop
-        if symbol := redis_client.brpop("updated_best_prices", 0.001):
-            logger.info(f"Checking arbitrage for {symbol[1]}")
+        if symbol := redis_client.brpop("updated_best_prices", 1):
             trading(symbol[1])
         else:
             sleep(0.001)

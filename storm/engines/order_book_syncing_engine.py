@@ -13,7 +13,7 @@ def main():
     service = SyncOrderBookService()
 
     while True:
-        response = redis.brpop("responses", 0.001)
+        response = redis.brpop("responses", 1)
         if response:
             service.update_order_book(response[1])
         else:

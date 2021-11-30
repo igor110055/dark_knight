@@ -12,11 +12,11 @@ if __name__ == "__main__":
     LUNA = set(["LUNAUSDT", "LUNABNB", "BNBUSDT"])
     # MATIC = set(["MATICUSDT", "MATICBNB", "BNBUSDT"])
     SAND = set(["SANDUSDT", "SANDBNB", "BNBUSDT"])
-    MANA = set(["MANAUSDT", "MANAETH", "ETHUSDT"])
+    # MANA = set(["MANAUSDT", "MANAETH", "ETHUSDT"])
     # MINA = set(["MINAUSDT", "MINABNB", "BNBUSDT"])
     # OMG = set(["OMGUSDT", "OMGETH", "ETHUSDT"])
     # GALA = set(["GALAUSDT", "GALABNB", "BNBUSDT"])
-    SOL = set(["SOLUSDT", "SOLBNB", "BNBUSDT"])
+    # SOL = set(["SOLUSDT", "SOLBNB", "BNBUSDT"])
 
     # TODO: use websocket-clients
-    asyncio.run(stream_symbols(WS_URL, ETH | LUNA | SAND | MANA | SOL ))
+    asyncio.run(stream_symbols(WS_URL, ETH | LUNA | SAND ))
