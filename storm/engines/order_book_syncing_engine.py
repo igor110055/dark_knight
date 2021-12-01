@@ -27,5 +27,5 @@ if __name__ == "__main__":
     logger.info("Ready to handle order book update")
     redis.delete("responses")
 
-    for _ in range(6):
+    for _ in range(4):
         Process(target=main).start()

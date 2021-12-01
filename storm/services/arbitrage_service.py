@@ -10,7 +10,7 @@ from ..exchanges.binance import get_client
 
 binance_client = get_client()
 binance_client.load_markets()
-redis = get_redis()
+
 file_handler = logging.FileHandler("arbitrage.log")
 logger = get_logger(__file__, handler=file_handler)
 trade_logger = get_logger("trading")
@@ -34,7 +34,9 @@ def get_arbitrage_opportunity(trading_group, expected_return):
     # TODO: separate into different list of symbols, use brpop
     for message in price_update_subscriber.listen():
         if message["type"] == "message":
-            check_arbitrage(natural, synthetic, expected_return)  # best prices have ttl
+            check_arbitrage(
+                natural, synthetic, expected_return, redis_client
+            )  # best prices have ttl
 
 
 # TODO: refactor two calculate price functions
@@ -95,11 +97,7 @@ def calculate_synthetic_bid(
 
 
 def check_arbitrage(
-    natural_symbol,
-    synthetic,
-    target_perc=0.4,
-    upper_bound=0.8,
-    usdt_amount=Decimal("20.0"),
+    natural_symbol, synthetic, target_return, redis_client, upper_bound=0.01
 ):
     (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
 
@@ -125,28 +123,17 @@ def check_arbitrage(
         best_prices_left, left_assets, best_prices_right, right_assets
     )
 
-    # FIXME: necessary check?
     if not synthetic_bid or not synthetic_ask:
         return
 
-    # TODO: extend to non USDT quote
-    # synthetic_ask_size = Decimal('10') / Decimal(synthetic_bid)
-
     # TODO: add available size
 
-    # TODO: use redis lock like symbol_lock
-
-    buy_synthetic_sell_natural_return_perc = (
-        (natural_bid - synthetic_ask) / synthetic_ask * 100
-    )
+    buy_synthetic_sell_natural_return = (natural_bid - synthetic_ask) / synthetic_ask
     logger.info(
-        f"[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}"
+        f"[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return}"
     )
 
-    if buy_synthetic_sell_natural_return_perc > target_perc:
-        print(
-            f"[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return_perc}"
-        )
+    if target_return < buy_synthetic_sell_natural_return < upper_bound:
         data = {
             "time": datetime.utcnow(),
             "strategy": "buy_synthetic_sell_natural",
@@ -159,21 +146,17 @@ def check_arbitrage(
             "synthetic_left_ask": best_prices_left["asks"],
             "synthetic_right_bid": best_prices_right["bids"],
             "synthetic_right_ask": best_prices_right["asks"],
-            "expected_return_perc": buy_synthetic_sell_natural_return_perc,
+            "expected_return_perc": buy_synthetic_sell_natural_return,
         }
         write_csv(data)
 
-        # FIXME: order execution
-        # if SymbolService.get_symbol(natural_symbol)['quote'] == 'USDT':
-        #     print('found')
-        # redis.set('TRADING', 'true', 1)
-        trade_count = int(redis.get("trade_count") or 0)
+        trade_count = int(redis_client.get("trade_count") or 0)
         if trade_count > TRADE_COUNT:
             return
 
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
         with redis_lock(
-            redis,
+            redis_client,
             f"buy_synthetic_sell_natural__{natural_symbol}_{left_curr}_{right_curr}",
         ) as lock:
             if lock.lock_acquired:
@@ -181,7 +164,7 @@ def check_arbitrage(
                     natural_symbol, synthetic, best_prices_left, best_prices_right
                 )
                 if traded:
-                    redis.set("trade_count", trade_count + 1)
+                    redis_client.set("trade_count", trade_count + 1)
 
                 lock.degrade = True
 
@@ -194,13 +177,11 @@ def check_arbitrage(
         #         trade_count += 1
         #         sleep(3)
 
-    buy_natural_sell_synthetic_return_perc = (
-        (synthetic_bid - natural_ask) / natural_ask * 100
-    )
+    buy_natural_sell_synthetic_return = (synthetic_bid - natural_ask) / natural_ask
     logger.info(
-        f"[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return_perc}"
+        f"[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return}"
     )
-    if buy_natural_sell_synthetic_return_perc > target_perc:
+    if target_return < buy_natural_sell_synthetic_return < upper_bound:
         data = {
             "time": datetime.utcnow(),
             "strategy": "buy_natural_sell_synthetic",
@@ -213,17 +194,17 @@ def check_arbitrage(
             "synthetic_left_ask": best_prices_left["asks"],
             "synthetic_right_bid": best_prices_right["bids"],
             "synthetic_right_ask": best_prices_right["asks"],
-            "expected_return_perc": buy_natural_sell_synthetic_return_perc,
+            "expected_return_perc": buy_natural_sell_synthetic_return,
         }
         write_csv(data)
 
-        trade_count = int(redis.get("trade_count") or 0)
+        trade_count = int(redis_client.get("trade_count") or 0)
         if trade_count > TRADE_COUNT:
             return
 
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
         with redis_lock(
-            redis,
+            redis_client,
             f"buy_natural_sell_synthetic__{natural_symbol}_{left_curr}_{right_curr}",
         ) as lock:
             if lock.lock_acquired:
@@ -235,19 +216,13 @@ def check_arbitrage(
                     best_prices_natural,
                 )
                 if traded:
-                    redis.set("trade_count", trade_count + 1)
+                    redis_client.set("trade_count", trade_count + 1)
 
                 lock.degrade = True
-    # pprint(
-    #     sorted(order_book['bids'].items(),
-    #            key=lambda item: item[0],
-    #            reverse=True)[:10])
-    # print(order_book['asks'][:10])
-    # update last_update_id
-    # check start_sequence increment
 
 
 def write_csv(data, filename="arbitrage.csv"):
+    # logger.info(str(data))
     with open(filename, "a") as csv_file:
         writer = csv.DictWriter(
             csv_file,
