@@ -102,11 +102,15 @@ class SyncOrderBookService:
             else:
                 best_prices = order_book_ob.best_prices
 
-                if not best_prices:
+                if best_prices is None:
+                    order_book_ob.best_prices = {"bids": best_bid, "asks": best_ask}
                     return
 
                 # no changes in top bid ask, no arbitrage opportunity
-                if best_prices["bids"] == best_bid and best_prices["asks"] == best_ask:
+                if best_bid < best_prices["bids"]:
+                    return
+
+                if best_ask > best_prices["asks"]:
                     return
 
                 logger.info(
