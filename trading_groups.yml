@@ -1,0 +1,90 @@
+- natural: ETHUSDT
+  synthetic:
+    BNBETH:
+      normal: False
+      assets: ["BNB", "ETH"]
+    BNBUSDT:
+      normal: True
+      assets: ["BNB", "USDT"]
+
+- natural: LUNAUSDT
+  synthetic:
+    LUNABNB:
+      normal: True
+      assets: ["LUNA", "BNB"]
+    BNBUSDT:
+      normal: True
+      assets: ["BNB", "USDT"]
+
+- natural: SANDUSDT
+  synthetic:
+    SANDBNB:
+      normal: True
+      assets: ["SAND", "BNB"]
+    BNBUSDT:
+      normal: True
+      assets: ["BNB", "USDT"]
+
+# - natural: MATICUSDT
+#   synthetic:
+#     MATICBNB:
+#       normal: True
+#       assets: ['MATIC', 'BNB']
+#     BNBUSDT:
+#       normal: True
+#       assets: ["BNB", "USDT"]
+
+# - natural: MANAUSDT
+#   synthetic:
+#     MANAETH:
+#       normal: True
+#       assets: ["MANA", "ETH"]
+#     ETHUSDT:
+#       normal: True
+#       assets: ["ETH", "USDT"]
+
+# - natural: MINAUSDT
+#   synthetic:
+#     MINABNB:
+#       normal: True
+#       assets: ['MINA', 'BNB']
+#     BNBUSDT:
+#       normal: True
+#       assets: ['BNB', 'USDT']
+
+# - natural: OMGUSDT
+#   synthetic:
+#     OMGETH:
+#       normal: True
+#       assets: ['OMG', 'ETH']
+#     ETHUSDT:
+#       normal: True
+#       assets: ['ETH', 'USDT']
+
+# - natural: SOLUSDT
+#   synthetic:
+#     SOLBNB:
+#       normal: True
+#       assets: ["SOL", "BNB"]
+#     BNBUSDT:
+#       normal: True
+#       assets: ["BNB", "USDT"]
+
+# - natural: GALAUSDT
+#   synthetic:
+#     GALABNB:
+#       normal: True
+#       assets: ["GALA", "BNB"]
+#     BNBUSDT:
+#       normal: True
+#       assets: ["BNB", "USDT"]
+
+# group to natural, so each natural can have multiple synthetics
+# - natural: LUNAUSDT
+#   synthetic:
+#     EURUSDT:
+#       normal: True
+#       assets: ['EUR', 'USDT']
+#     LUNAEUR:
+#       normal: True
+#       assets: ['LUNA', 'EUR']

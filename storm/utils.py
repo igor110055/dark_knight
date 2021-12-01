@@ -1,6 +1,8 @@
 import logging
 import os
 
+import yaml
+
 logging.basicConfig(level=os.getenv("LOG_LEVEL", logging.INFO))
 
 loggers = {}
@@ -69,3 +71,11 @@ def get_assets(symbol):
 
     if len(symbol) == 8:
         return symbol[:4], symbol[4:]
+
+
+def load_yaml(file_path):
+    with open(file_path, "r") as stream:
+        try:
+            return yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
