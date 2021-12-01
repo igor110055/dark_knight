@@ -5,7 +5,7 @@ from decimal import Decimal
 from ..models.order_book import OrderBook
 from ..utils import get_logger, logging, redis_lock
 from ..clients.redis_client import get_client as get_redis
-from ..services.place_order_service import OrderEngine
+from .place_order_service import OrderEngine
 from ..exchanges.binance import get_client
 
 binance_client = get_client()
@@ -17,9 +17,27 @@ trade_logger = get_logger("trading")
 engine = OrderEngine(binance_client)
 
 TRADE_COUNT = 100
+
+
+def get_arbitrage_opportunity(trading_group, expected_return):
+    natural = trading_group["natural"]
+    synthetic = trading_group["synthetic"]
+
+    redis_client = get_redis()
+    redis_client.set("trade_count", 0)
+    price_update_subscriber = redis_client.pubsub()
+
+    symbols = [natural, *synthetic]
+    for symbol in symbols:
+        price_update_subscriber.subscribe(f"updated_best_prices:{symbol}")
+
+    # TODO: separate into different list of symbols, use brpop
+    for message in price_update_subscriber.listen():
+        if message["type"] == "message":
+            check_arbitrage(natural, synthetic, expected_return)  # best prices have ttl
+
+
 # TODO: refactor two calculate price functions
-
-
 def calculate_synthetic_ask(
     best_prices_left, left_assets, best_prices_right, right_assets
 ):

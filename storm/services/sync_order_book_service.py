@@ -14,7 +14,6 @@ redis = get_client()
 class SyncOrderBookService:
     def __init__(self, redis=redis):
         self.redis = redis
-        self.subscriber = redis.pubsub()
 
     # TODO: check passing string or retrieve from redis faster
     def update_order_book(self, message: str, from_cache=False, last_sequence=None):
@@ -113,7 +112,7 @@ class SyncOrderBookService:
                     f"{symbol} best bid ask changed: best_bid {best_bid}, best_ask {best_ask}"
                 )
                 order_book_ob.best_prices = {"bids": best_bid, "asks": best_ask}
-                self.redis.lpush("updated_best_prices", symbol)
+                self.redis.publish(f"updated_best_prices:{symbol}", 1)
 
     def get_order_book_snapshot(self, symbol, sync=False):
         if sync:
