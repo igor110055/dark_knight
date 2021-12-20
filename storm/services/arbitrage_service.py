@@ -1,6 +1,5 @@
 import csv
 from datetime import datetime
-from decimal import Decimal
 
 from ..models.order_book import OrderBook
 from ..utils import get_logger, logging, redis_lock
@@ -27,7 +26,7 @@ def get_arbitrage_opportunity(trading_group, expected_return):
     redis_client.set("trade_count", 0)
     price_update_subscriber = redis_client.pubsub()
 
-    symbols = [natural, *synthetic]
+    symbols = [natural["symbol"], *[s["symbol"] for s in synthetic]]
     for symbol in symbols:
         price_update_subscriber.subscribe(f"updated_best_prices:{symbol}")
 
@@ -35,7 +34,7 @@ def get_arbitrage_opportunity(trading_group, expected_return):
     for message in price_update_subscriber.listen():
         if message["type"] == "message":
             check_arbitrage(
-                natural, synthetic, expected_return, redis_client
+                natural["symbol"], synthetic, expected_return, redis_client
             )  # best prices have ttl
 
 
@@ -99,17 +98,19 @@ def calculate_synthetic_bid(
 def check_arbitrage(
     natural_symbol, synthetic, target_return, redis_client, upper_bound=0.01
 ):
-    (left_curr, left_assets), (right_curr, right_assets) = synthetic.items()
+    left_synthetic, right_synthetic = synthetic
+    synthetic_left_symbol = left_synthetic["symbol"]
+    synthetic_right_symbol = right_synthetic["symbol"]
 
     order_book = OrderBook.get(natural_symbol)
     if not (best_prices_natural := order_book.best_prices):
         return
 
-    left_order_book = OrderBook.get(left_curr)
+    left_order_book = OrderBook.get(synthetic_left_symbol)
     if not (best_prices_left := left_order_book.best_prices):
         return
 
-    right_order_book = OrderBook.get(right_curr)
+    right_order_book = OrderBook.get(synthetic_right_symbol)
     if not (best_prices_right := right_order_book.best_prices):
         return
 
@@ -117,10 +118,10 @@ def check_arbitrage(
     natural_ask = best_prices_natural["asks"]
 
     synthetic_ask = calculate_synthetic_ask(
-        best_prices_left, left_assets, best_prices_right, right_assets
+        best_prices_left, left_synthetic, best_prices_right, right_synthetic
     )
     synthetic_bid = calculate_synthetic_bid(
-        best_prices_left, left_assets, best_prices_right, right_assets
+        best_prices_left, left_synthetic, best_prices_right, right_synthetic
     )
 
     if not synthetic_bid or not synthetic_ask:
@@ -130,7 +131,7 @@ def check_arbitrage(
 
     buy_synthetic_sell_natural_return = (natural_bid - synthetic_ask) / synthetic_ask
     logger.info(
-        f"[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return}"
+        f"[Buy synthetic sell natural] Natural: {natural_symbol}, synthetic: {[synthetic_left_symbol, synthetic_right_symbol]}, natural bid {natural_bid}, synthetic ask: {synthetic_ask}, expected return: {buy_synthetic_sell_natural_return}"
     )
 
     if target_return < buy_synthetic_sell_natural_return < upper_bound:
@@ -138,8 +139,8 @@ def check_arbitrage(
             "time": datetime.utcnow(),
             "strategy": "buy_synthetic_sell_natural",
             "natural": natural_symbol,
-            "synthetic_left": left_curr,
-            "synthetic_right": right_curr,
+            "synthetic_left": synthetic_left_symbol,
+            "synthetic_right": synthetic_right_symbol,
             "natural_bid": best_prices_natural["bids"],
             "natural_ask": best_prices_natural["asks"],
             "synthetic_left_bid": best_prices_left["bids"],
@@ -157,7 +158,7 @@ def check_arbitrage(
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
         with redis_lock(
             redis_client,
-            f"buy_synthetic_sell_natural__{natural_symbol}_{left_curr}_{right_curr}",
+            f"buy_synthetic_sell_natural__{natural_symbol}_{synthetic_left_symbol}_{synthetic_right_symbol}",
         ) as lock:
             if lock.lock_acquired:
                 traded = engine.buy_synthetic_sell_natural(
@@ -179,15 +180,15 @@ def check_arbitrage(
 
     buy_natural_sell_synthetic_return = (synthetic_bid - natural_ask) / natural_ask
     logger.info(
-        f"[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[left_curr, right_curr]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return}"
+        f"[Buy natural sell synthetic] Natural: {natural_symbol}, synthetic: {[synthetic_left_symbol, synthetic_right_symbol]}, natural ask {natural_ask}, synthetic bid: {synthetic_bid}, expected return: {buy_natural_sell_synthetic_return}"
     )
     if target_return < buy_natural_sell_synthetic_return < upper_bound:
         data = {
             "time": datetime.utcnow(),
             "strategy": "buy_natural_sell_synthetic",
             "natural": natural_symbol,
-            "synthetic_left": left_curr,
-            "synthetic_right": right_curr,
+            "synthetic_left": synthetic_left_symbol,
+            "synthetic_right": synthetic_right_symbol,
             "natural_bid": best_prices_natural["bids"],
             "natural_ask": best_prices_natural["asks"],
             "synthetic_left_bid": best_prices_left["bids"],
@@ -205,7 +206,7 @@ def check_arbitrage(
         # TODO: instead of trading here, retrun flag and trade (DO ONE THING principle)
         with redis_lock(
             redis_client,
-            f"buy_natural_sell_synthetic__{natural_symbol}_{left_curr}_{right_curr}",
+            f"buy_natural_sell_synthetic__{natural_symbol}_{synthetic_left_symbol}_{synthetic_right_symbol}",
         ) as lock:
             if lock.lock_acquired:
                 traded = engine.buy_natural_sell_synthetic(

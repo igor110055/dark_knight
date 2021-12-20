@@ -19,4 +19,4 @@ if __name__ == "__main__":
     # SOL = set(["SOLUSDT", "SOLBNB", "BNBUSDT"])
 
     # TODO: use websocket-clients
-    asyncio.run(stream_symbols(WS_URL, ETH | LUNA | SAND ))
+    asyncio.run(stream_symbols(WS_URL, ETH | LUNA | SAND))

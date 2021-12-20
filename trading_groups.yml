@@ -1,27 +1,36 @@
-- natural: ETHUSDT
+- natural: 
+    symbol: ETHUSDT
+    normal: True
+    assets: ["ETH", "USDT"]
   synthetic:
-    BNBETH:
+    - symbol: BNBETH
       normal: False
       assets: ["BNB", "ETH"]
-    BNBUSDT:
+    - symbol: BNBUSDT
       normal: True
       assets: ["BNB", "USDT"]
 
-- natural: LUNAUSDT
+- natural: 
+    symbol: LUNAUSDT
+    normal: True
+    assets: ["LUNA", "USDT"]
   synthetic:
-    LUNABNB:
+    - symbol: LUNABNB
       normal: True
       assets: ["LUNA", "BNB"]
-    BNBUSDT:
+    - symbol: BNBUSDT
       normal: True
       assets: ["BNB", "USDT"]
 
-- natural: SANDUSDT
+- natural: 
+    symbol: SANDUSDT
+    normal: True
+    assets: ["SAND", "USDT"]
   synthetic:
-    SANDBNB:
+    - symbol: SANDBNB
       normal: True
       assets: ["SAND", "BNB"]
-    BNBUSDT:
+    - symbol: BNBUSDT
       normal: True
       assets: ["BNB", "USDT"]
 
