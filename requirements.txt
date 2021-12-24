@@ -10,6 +10,7 @@ hiredis
 aioredis
 sqlalchemy
 rq
+PyYAML
 
 # dev
 pytest
