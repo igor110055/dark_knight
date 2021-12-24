@@ -1,71 +1,16 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"strings"
-	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/go-redis/redis/v8"
 )
 
-var ctx = context.Background()
-
-func main() {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	tradingGroups, err := readTradingGroup("../trading_groups.yml")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	var prevBssnReturn, prevBnssReturn, bssnReturn, bnssReturn float32
-
-	for {
-		for _, tradingGroup := range *tradingGroups {
-			natural := tradingGroup.Natural.Symbol
-			synthetics := tradingGroup.Synthetic
-			bssnReturn, bnssReturn, err = check_arbitrage(natural, synthetics, 0.0002, rdb)
-			if err == nil && bssnReturn != prevBssnReturn && bnssReturn != prevBnssReturn {
-				if bssnReturn > 0.0 || bnssReturn > 0.0 {
-					fmt.Println(natural, time.Now(), bssnReturn, bnssReturn)
-					prevBssnReturn = bssnReturn
-					prevBnssReturn = bnssReturn
-				}
-			}
-		}
-	}
-}
-
-type BestPrice struct {
-	Bids float32 `json:"bids"`
-	Asks float32 `json:"asks"`
-}
-
-type TradingGroup struct {
-	Natural   *CryptoSymbol     `yaml:"natural"`
-	Synthetic *[2]*CryptoSymbol `yaml:"synthetic"`
-}
-
-type CryptoSymbol struct {
-	Symbol string     `yaml:"symbol"`
-	Normal bool       `yaml:"normal"`
-	Assets *[2]string `yaml:"assets"`
-	Prices *BestPrice
-}
-
 func check_arbitrage(
 	naturalSymbol string,
 	synthetics *[2]*CryptoSymbol,
-	targetReturn float32,
 	redisClient *redis.Client) (float32, float32, error) {
 
 	var err error
@@ -169,19 +114,4 @@ func getBestPrice(symbol string, redisClient *redis.Client) (*BestPrice, error) 
 	}
 
 	return &bestPrice, nil
-}
-
-func readTradingGroup(filename string) (*[]TradingGroup, error) {
-	buf, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	tradingGroups := &[]TradingGroup{}
-	err = yaml.Unmarshal(buf, tradingGroups)
-	if err != nil {
-		return nil, err
-	}
-
-	return tradingGroups, nil
 }
