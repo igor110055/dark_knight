@@ -55,7 +55,7 @@ def create_limit_order(side, symbol, price, quantity):
         "symbol": symbol,
         "side": side,
         "type": "LIMIT",
-        "price": f"{price:.8f}".rstrip('0'),
+        "price": f"{price:.8f}".rstrip("0"),
         "quantity": quantity,
         "timeInForce": "FOK",
         "timestamp": timestamp,

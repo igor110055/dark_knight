@@ -7,6 +7,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .fill import Fill
 
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -23,4 +24,4 @@ class Order(Base):
     status = Column(String)  # TODO: enum
     transacted_at = Column(Integer)
 
-    fills: Fill = relationship("Fill", back_populates="order", uselist=True)
+    fills: "Fill" = relationship("Fill", back_populates="order", uselist=True)

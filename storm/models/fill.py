@@ -18,5 +18,5 @@ class Fill(Base):
     commission = Column(Numeric)
     commission_asset = Column(String)
     order_id = Column(Integer, ForeignKey("orders.id"))
-    order: Order = relationship("Order", back_populates="fills", uselist=False)
+    order: "Order" = relationship("Order", back_populates="fills", uselist=False)
     trade_id = Column(Integer)

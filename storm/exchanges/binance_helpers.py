@@ -10,7 +10,7 @@ from ..clients.rest_client import get_session
 
 load_dotenv()
 api_key = os.getenv("API_KEY")
-secret_key = os.getenv("SECRET_KEY", '')
+secret_key = os.getenv("SECRET_KEY", "")
 headers = {"X-MBX-APIKEY": api_key}
 message_hash_key = secret_key.encode("utf-8")
 

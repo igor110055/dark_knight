@@ -5,7 +5,7 @@ from ..clients.redis_client import get_client
 
 
 class OrderBook:
-    _registry: Dict[str, OrderBook] = {}
+    _registry: Dict[str, "OrderBook"] = {}
 
     @classmethod
     def get(cls, symbol):

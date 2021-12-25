@@ -7,6 +7,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .order import Order
 
+
 class Arbitrage(Base):
     __tablename__ = "arbitrages"
 
@@ -21,6 +22,6 @@ class Arbitrage(Base):
     fee_asset = Column(String)
     fee_quantity = Column(Numeric)
 
-    orders: Order = relationship(
+    orders: "Order" = relationship(
         "Order", primaryjoin="foreign(Arbitrage.group_id)==Order.group_id", uselist=True
     )
