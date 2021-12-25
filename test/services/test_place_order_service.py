@@ -1,11 +1,11 @@
 import pytest
-from storm.services.place_order_service import OrderEngine
+from storm.services.place_order_service import PlaceOrderService
 from storm.exchanges.binance import get_client
 
 
 @pytest.fixture
 def service():
-    return OrderEngine(get_client())
+    return PlaceOrderService(get_client())
 
 
 def test_buy_natural_sell_synthetic__cannot_book_the_first_limit_order__fail_the_arbitrage(

@@ -3,7 +3,7 @@ from random import randint
 from typing import Iterable
 
 import simplejson as json
-import websockets
+import websockets.connect as wss_connect  # type: ignore
 
 from ..clients.redis_client import get_client
 from ..utils import chunks, get_logger
@@ -30,7 +30,7 @@ async def stream_symbols(
     """
 
     # auto reconnect
-    async for websocket in websockets.connect(url, ping_timeout=timeout):
+    async for websocket in wss_connect(url, ping_timeout=timeout):
         for symbol in symbols:
             payload = {
                 "method": "SUBSCRIBE",
