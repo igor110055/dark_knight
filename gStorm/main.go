@@ -10,7 +10,7 @@ import (
 
 var ctx = context.Background()
 
-const EXPECTED_RETURN = 0.003
+const EXPECTED_RETURN = 0 //0.003
 
 func main() {
 	rdb := redis.NewClient(&redis.Options{
@@ -30,12 +30,12 @@ func main() {
 
 	for {
 		for _, tradingGroup := range *tradingGroups {
-			natural := tradingGroup.Natural.Symbol
+			natural := tradingGroup.Natural
 			synthetics := tradingGroup.Synthetic
-			bssnReturn, bnssReturn, err = check_arbitrage(natural, synthetics, rdb)
+			bssnReturn, bnssReturn, err = checkArbitrage(natural, synthetics, rdb)
 			if err == nil && bssnReturn != prevBssnReturn && bnssReturn != prevBnssReturn {
 				if bssnReturn > EXPECTED_RETURN || bnssReturn > EXPECTED_RETURN {
-					fmt.Println(natural, time.Now(), bssnReturn, bnssReturn)
+					fmt.Println(natural.Symbol, time.Now(), bssnReturn, bnssReturn)
 					prevBssnReturn = bssnReturn
 					prevBnssReturn = bnssReturn
 				}

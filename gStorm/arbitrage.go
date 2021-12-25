@@ -1,37 +1,29 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/go-redis/redis/v8"
 )
 
-func check_arbitrage(
-	naturalSymbol string,
+func checkArbitrage(
+	natural *CryptoSymbol,
 	synthetics *[2]*CryptoSymbol,
 	redisClient *redis.Client) (float32, float32, error) {
 
 	var err error
 
-	for _, synthetic := range synthetics {
-		synthetic.Prices, err = getBestPrice(synthetic.Symbol, redisClient)
-		if err != nil {
-			return 0.0, 0.0, err
-		}
-	}
+	err = getTradingPrices(natural, synthetics, redisClient)
 
-	naturalPrices, err := getBestPrice(naturalSymbol, redisClient)
 	if err != nil {
 		return 0.0, 0.0, err
 	}
 
-	bssnReturn, err := buySyntheticSellNaturalReturn(naturalPrices.Bids, synthetics)
+	bssnReturn, err := buySyntheticSellNaturalReturn(natural.Prices.Bids, synthetics)
 	if err != nil {
 		return 0.0, 0.0, err
 	}
-	bnssReturn, err := buyNaturalSellSyntheticReturn(naturalPrices.Asks, synthetics)
+	bnssReturn, err := buyNaturalSellSyntheticReturn(natural.Prices.Asks, synthetics)
 	if err != nil {
 		return 0.0, 0.0, err
 	}
@@ -95,23 +87,4 @@ func calculateSyntheticBid(synthetics *[2]*CryptoSymbol) (float32, error) {
 	}
 
 	return syntheticBids[0] * syntheticBids[1], nil
-}
-
-func getBestPrice(symbol string, redisClient *redis.Client) (*BestPrice, error) {
-	var bestPrice BestPrice
-	var bestPriceStr string
-	var err error
-
-	bestPriceStr, err = redisClient.Get(ctx, fmt.Sprintf("best_prices:%s", symbol)).Result()
-	// fmt.Println(bestPriceStr)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.NewDecoder(strings.NewReader(bestPriceStr)).Decode(&bestPrice)
-	if err != nil {
-		return nil, err
-	}
-
-	return &bestPrice, nil
 }
