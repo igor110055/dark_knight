@@ -1,8 +1,11 @@
+from typing import TYPE_CHECKING
 from sqlalchemy import Column, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from .base import Base
 
+if TYPE_CHECKING:
+    from .fill import Fill
 
 class Order(Base):
     __tablename__ = "orders"
@@ -20,4 +23,4 @@ class Order(Base):
     status = Column(String)  # TODO: enum
     transacted_at = Column(Integer)
 
-    fills = relationship("Fill", back_populates="order")
+    fills: Fill = relationship("Fill", back_populates="order", uselist=True)

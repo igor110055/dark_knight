@@ -4,7 +4,7 @@ from datetime import datetime
 from ..models.order_book import OrderBook
 from ..utils import get_logger, logging, redis_lock
 from ..clients.redis_client import get_client as get_redis
-from .place_order_service import OrderEngine
+from .place_order_service import PlaceOrderService
 from ..exchanges.binance import get_client
 
 binance_client = get_client()
@@ -13,7 +13,7 @@ binance_client.load_markets()
 file_handler = logging.FileHandler("arbitrage.log")
 logger = get_logger(__file__, handler=file_handler)
 trade_logger = get_logger("trading")
-engine = OrderEngine(binance_client)
+service = PlaceOrderService(binance_client)
 
 TRADE_COUNT = 100
 
@@ -161,7 +161,7 @@ def check_arbitrage(
             f"buy_synthetic_sell_natural__{natural_symbol}_{synthetic_left_symbol}_{synthetic_right_symbol}",
         ) as lock:
             if lock.lock_acquired:
-                traded = engine.buy_synthetic_sell_natural(
+                traded = service.buy_synthetic_sell_natural(
                     natural_symbol, synthetic, best_prices_left, best_prices_right
                 )
                 if traded:
@@ -209,11 +209,9 @@ def check_arbitrage(
             f"buy_natural_sell_synthetic__{natural_symbol}_{synthetic_left_symbol}_{synthetic_right_symbol}",
         ) as lock:
             if lock.lock_acquired:
-                traded = engine.buy_natural_sell_synthetic(
+                traded = service.buy_natural_sell_synthetic(
                     natural_symbol,
                     synthetic,
-                    best_prices_left,
-                    best_prices_right,
                     best_prices_natural,
                 )
                 if traded:

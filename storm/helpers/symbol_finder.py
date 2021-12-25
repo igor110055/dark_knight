@@ -1,7 +1,8 @@
 import csv
+from typing import List, Dict
 
 
-SYMBOLS = {}
+SYMBOLS: Dict[str, List] = {}
 
 
 def load_symbols(file_path="symbols.csv"):

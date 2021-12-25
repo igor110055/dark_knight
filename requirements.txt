@@ -8,9 +8,17 @@ redis
 websocket-client
 hiredis
 aioredis
-sqlalchemy
+sqlalchemy[mypy]
 rq
 PyYAML
+mypy
+
+# typing
+sqlalchemy-stubs
+types-simplejson
+types-PyYAML
+types-redis
+types-requests
 
 # dev
 pytest

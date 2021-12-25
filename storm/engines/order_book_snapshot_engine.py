@@ -8,11 +8,13 @@ from ..clients.redis_client import get_client
 from ..exchanges.binance import get_order_book
 from ..utils import get_logger
 
+from typing import Dict
+
 # websocket.enableTrace(True)
 
-SNAPSHOTS = dict()
-WEBSOCKETS = dict()
-STOP_EVENTS = dict()
+SNAPSHOTS: Dict[str, str] = dict()
+WEBSOCKETS: Dict[str, Thread] = dict()
+STOP_EVENTS: Dict[str, Event] = dict()
 
 WS_URL = "wss://stream.binance.com:9443/ws"
 

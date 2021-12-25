@@ -11,7 +11,7 @@ logger = get_logger(__file__)
 redis = get_client()  # TODO: move into class
 
 
-class OrderEngine:
+class PlaceOrderService:
     def __init__(
         self, client, currency="USDT", amount=Decimal("40"), taker_fee=Decimal("0.001")
     ):
@@ -31,8 +31,6 @@ class OrderEngine:
         self,
         natural,
         synthetic,
-        best_prices_left,
-        best_prices_right,
         natural_best_prices,
         delay=300,
     ):
@@ -171,7 +169,6 @@ class OrderEngine:
     def buy_synthetic_sell_natural(
         self, natural, synthetic, best_prices_left, best_prices_right, delay=300
     ):
-        return
         natural_order = None
         first_order = None
         second_order = None
@@ -181,31 +178,6 @@ class OrderEngine:
         left_assets = left_items["assets"]
         right_normal = right_items["normal"]
         right_assets = right_items["assets"]
-
-        # natural_bid = best_prices_natural['bid'][0]
-
-        # if left_normal:
-        #     left_synthetic_ask = best_prices_left['ask'][0]
-        # else:
-        #     bid = best_prices_left['bid'][0]
-        #     if not bid:
-        #         return
-        #     left_synthetic_ask = 1 / best_prices_left['bid'][0]
-
-        # if right_normal:
-        #     right_synthetic_ask = best_prices_right['ask'][0]
-        # else:
-        #     bid = best_prices_right['bid'][0]
-        #     if not bid:
-        #         return
-        #     right_synthetic_ask = 1 / best_prices_right['bid'][0]
-
-        # synthetic_ask = left_synthetic_ask * right_synthetic_ask
-        # if not synthetic_ask:
-        #     return
-
-        # logging.info(
-        #     f'[Order Engine] natural: {natural}, synthetic: {synthetic}, expected profit {profit_perc}')
 
         try:
             # print(natural, natural[-4:] != 'USDT')
@@ -219,16 +191,6 @@ class OrderEngine:
             if (
                 self.trading_currency in left_assets
             ):  # check start position, left or right
-                # if left_normal:
-                #     diff = now - best_prices_left['ask'][1][1]
-                #     logger.info(f'[Order Engine] {left_symbol} time lag: {diff}')
-                #     if diff > delay:
-                #         return
-                # else:
-                #     diff = now - best_prices_left['bid'][1][1]
-                #     logger.info(f'[Order Engine] {left_symbol} time lag: {diff}')
-                #     if diff > delay:
-                #         return
                 left_order, amount = first_triangle_order(
                     self.trading_currency,
                     self.trading_amount,
@@ -238,34 +200,13 @@ class OrderEngine:
                 )
             else:
                 if left_normal:
-                    # diff = now - best_prices_left['ask'][1][1]
-                    # logging.info(
-                    #     f'[Order Engine] {left_symbol} time lag: {diff}')
-                    # if diff > 1000000000000:
-                    #     import pdb
-                    #     pdb.set_trace()
-                    # if diff > delay:
-                    #     return
 
-                    # post_left_synthetic_order = lambda quote_quantity:self.client.create_market_buy_order(left_symbol, None, params={'quoteOrderQty': quote_quantity})
                     def post_left_synthetic_order(quote_quantity):
                         return self.client.create_market_order(
                             "BUY", "MARKET", left_symbol, quote_quantity
                         )
 
                 else:
-                    # bid = best_prices_left['bid'][0]
-                    # diff = now - best_prices_left['bid'][1][1]
-                    # logging.info(
-                    #     f'[Order Engine] {left_symbol} time lag: {diff}')
-                    # if diff > 1000000000000:
-                    #     import pdb
-                    #     pdb.set_trace()
-                    # if diff > delay:
-                    #     return
-                    # if not bid:
-                    #     return
-                    # left_synthetic_ask = 1 / bid
 
                     def post_left_synthetic_order(quantity):
                         return self.client.create_market_order(
@@ -276,24 +217,6 @@ class OrderEngine:
             post_right_synthetic_order = None
 
             if self.trading_currency in right_assets:
-                # if right_normal:
-                #     diff = now - best_prices_right['ask'][1][1]
-                #     logging.info(
-                #         f'[Order Engine] {right_symbol} time lag: {diff}')
-                #     if diff > 1000000000000:
-                #         import pdb
-                #         pdb.set_trace()
-                #     if diff > delay:
-                #         return
-                # else:
-                #     diff = now - best_prices_right['bid'][1][1]
-                #     logging.info(
-                #         f'[Order Engine] {right_symbol} time lag: {diff}')
-                #     if diff > 1000000000000:
-                #         import pdb
-                #         pdb.set_trace()
-                #     if diff > delay:
-                #         return
                 right_order, amount = first_triangle_order(
                     self.trading_currency,
                     self.trading_amount,
@@ -309,35 +232,12 @@ class OrderEngine:
                             "BUY", "MARKET", right_symbol, quote_quantity
                         )
 
-                    # right_synthetic_ask = best_prices_right['ask'][0]
-                    # diff = now - best_prices_right['ask'][1][1]
-                    # logging.info(
-                    #     f'[Order Engine] {right_symbol} time lag: {diff}')
-                    # if diff > 1000000000000:
-                    #     import pdb
-                    #     pdb.set_trace()
-                    # if diff > delay:
-                    #     return
                 else:
-                    # bid = best_prices_right['bid'][0]
-                    # if not bid:
-                    #     return
-                    # right_synthetic_ask = 1 / bid
-                    # right_synthetic_ask_amount = best_prices_right['bid'][1]
 
                     def post_right_synthetic_order(quantity):
                         return self.client.create_market_order(
                             "SELL", "MARKET", right_symbol, quantity
                         )
-
-                    # diff = now - best_prices_right['bid'][1][1]
-                    # logging.info(
-                    #     f'[Order Engine] {right_symbol} time lag: {diff}')
-                    # if diff > 1000000000000:
-                    #     import pdb
-                    #     pdb.set_trace()
-                    # if diff > delay:
-                    #     return
 
             first_order = left_order or right_order
 

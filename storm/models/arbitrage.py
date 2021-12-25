@@ -1,8 +1,11 @@
+from typing import TYPE_CHECKING
 from sqlalchemy import Column, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from .base import Base
 
+if TYPE_CHECKING:
+    from .order import Order
 
 class Arbitrage(Base):
     __tablename__ = "arbitrages"
@@ -18,6 +21,6 @@ class Arbitrage(Base):
     fee_asset = Column(String)
     fee_quantity = Column(Numeric)
 
-    orders = relationship(
-        "Order", primaryjoin="foreign(Arbitrage.group_id)==Order.group_id"
+    orders: Order = relationship(
+        "Order", primaryjoin="foreign(Arbitrage.group_id)==Order.group_id", uselist=True
     )

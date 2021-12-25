@@ -1,10 +1,11 @@
 import simplejson as json
+from typing import Dict
 
 from ..clients.redis_client import get_client
 
 
 class OrderBook:
-    _registry = {}
+    _registry: Dict[str, OrderBook] = {}
 
     @classmethod
     def get(cls, symbol):

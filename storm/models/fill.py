@@ -1,7 +1,11 @@
+from typing import TYPE_CHECKING
 from sqlalchemy import Column, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .order import Order
 
 
 class Fill(Base):
@@ -14,5 +18,5 @@ class Fill(Base):
     commission = Column(Numeric)
     commission_asset = Column(String)
     order_id = Column(Integer, ForeignKey("orders.id"))
-    order = relationship("Order", back_populates="fills")
+    order: Order = relationship("Order", back_populates="fills", uselist=False)
     trade_id = Column(Integer)

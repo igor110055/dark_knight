@@ -6,7 +6,7 @@ from ..utils import get_logger, load_yaml
 logger = get_logger(__file__)
 
 
-EXPECTED_RETURN = 0.0025
+EXPECTED_RETURN = 0.003
 
 
 def main():

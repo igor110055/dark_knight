@@ -7,11 +7,10 @@ from urllib.parse import urlencode, urljoin
 from dotenv import load_dotenv
 
 from ..clients.rest_client import get_session
-from ..clients.redis_queue import get_queue
 
 load_dotenv()
 api_key = os.getenv("API_KEY")
-secret_key = os.getenv("SECRET_KEY")
+secret_key = os.getenv("SECRET_KEY", '')
 headers = {"X-MBX-APIKEY": api_key}
 message_hash_key = secret_key.encode("utf-8")
 
@@ -54,15 +53,3 @@ def _request(method, path, params):
     url = urljoin(REST_URL, path)
     response = session.request(method, url, headers=headers, params=params)
     return response.json()
-
-
-redis_queue = get_queue()
-
-
-def allow_async(func):
-    def wrapped_func(*args, is_async=False, **kwargs):
-        if is_async:
-            return redis_queue.enqueue(func, *args, **kwargs)
-        return func(*args, **kwargs)
-
-    return wrapped_func

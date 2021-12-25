@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from ..clients.rest_client import get_session
 from ..utils import get_logger
-from .binance_helpers import SYMBOLS, allow_async, get, post
+from .binance_helpers import SYMBOLS, get, post
 
 logger = get_logger(__file__)
 
@@ -49,7 +49,6 @@ class Binance:
         return get("api/v3/exchangeInfo")
 
 
-@allow_async
 def create_limit_order(side, symbol, price, quantity):
     timestamp = int(time.time() * 1000)
     data = {
@@ -73,7 +72,6 @@ def get_min_quantity(symbol):
             return filter["minQty"].rstrip("0")
 
 
-@allow_async
 def get_order_book(symbol):
     request_uuid = uuid4()
     logger.info(f"[{request_uuid}] GET order book request for {symbol}")
@@ -84,7 +82,6 @@ def get_order_book(symbol):
     return resp.json()
 
 
-@allow_async
 def get_orders(symbol, limit=100):
     timestamp = int(time.time() * 1000)
     params = {
@@ -97,7 +94,6 @@ def get_orders(symbol, limit=100):
     return get("api/v3/allOrders", params=params)
 
 
-@allow_async
 def get_balances():
     timestamp = int(time.time() * 1000)
     params = {"recvWindow": 1000, "timestamp": timestamp}

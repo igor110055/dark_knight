@@ -3,9 +3,11 @@ import os
 
 import yaml
 
+from typing import Dict
+
 logging.basicConfig(level=os.getenv("LOG_LEVEL", logging.INFO))
 
-loggers = {}
+loggers: Dict[str, logging.Logger] = {}
 
 grey = "\x1b[38;21m"
 yellow = "\x1b[33;21m"

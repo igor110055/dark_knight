@@ -1,6 +1,6 @@
 import asyncio
 from random import randint
-from typing import List
+from typing import Iterable
 
 import simplejson as json
 import websockets
@@ -14,7 +14,7 @@ logger = get_logger(__file__)
 
 async def stream_symbols(
     url: str,
-    symbols: List[str],
+    symbols: Iterable[str],
     stream_id: int = randint(1, 99),
     timeout: int = 60 * 15,
     redis=redis,
