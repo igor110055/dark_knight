@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -34,7 +35,7 @@ func checkArbitrage(
 func buySyntheticSellNaturalReturn(naturalBid float32, synthetics *[2]*CryptoSymbol) (float32, error) {
 	syntheticAsk, err := calculateSyntheticAsk(synthetics)
 	if syntheticAsk == 0.0 || err != nil {
-		return 0.0, fmt.Errorf("missing synthetic ask")
+		return 0.0, err
 	}
 
 	return (naturalBid - syntheticAsk) / syntheticAsk, nil
@@ -43,7 +44,7 @@ func buySyntheticSellNaturalReturn(naturalBid float32, synthetics *[2]*CryptoSym
 func buyNaturalSellSyntheticReturn(naturalAsk float32, synthetics *[2]*CryptoSymbol) (float32, error) {
 	syntheticBid, err := calculateSyntheticBid(synthetics)
 	if syntheticBid == 0.0 || err != nil {
-		return 0.0, fmt.Errorf("missing synthetic bid")
+		return 0.0, err
 	}
 
 	return (syntheticBid - naturalAsk) / naturalAsk, nil
@@ -55,13 +56,15 @@ func calculateSyntheticAsk(synthetics *[2]*CryptoSymbol) (float32, error) {
 
 	for index, synthetic := range synthetics {
 		if synthetic.Normal {
+			if synthetic.Prices == nil || synthetic.Prices.Asks == 0.0 {
+				return 0.0, fmt.Errorf("%v missing %v ask price", time.Now(), synthetic.Symbol)
+			}
 			syntheticAsks[index] = synthetic.Prices.Asks
 		} else {
 			syntheticBid = synthetic.Prices.Bids
 			if syntheticBid == 0.0 {
-				return syntheticBid, fmt.Errorf("missing %v bid price", synthetic.Symbol)
+				return 0.0, fmt.Errorf("%v missing %v bid price", time.Now(), synthetic.Symbol)
 			}
-
 			syntheticAsks[index] = 1 / syntheticBid
 		}
 	}

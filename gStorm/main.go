@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -10,9 +12,16 @@ import (
 
 var ctx = context.Background()
 
-const EXPECTED_RETURN = 0 //0.003
+var EXPECTED_RETURN float32 = 0.003
 
 func main() {
+	if len(os.Args) > 1 {
+		expected_return, _ := strconv.ParseFloat(os.Args[1], 32)
+		EXPECTED_RETURN = float32(expected_return)
+	}
+
+	fmt.Println("EXPECTED RETURN:", EXPECTED_RETURN)
+
 	rdb := redis.NewClient(&redis.Options{
 		Network: "unix",
 		// Addr:     "localhost:6379",
@@ -26,21 +35,29 @@ func main() {
 		fmt.Println(err)
 	}
 
-	var prevBssnReturn, prevBnssReturn, bssnReturn, bnssReturn float32
+	bssnReturn := make(map[string]float32, len(*tradingGroups))
+	bnssReturn := make(map[string]float32, len(*tradingGroups))
+	var now time.Time
 
 	for {
 		for _, tradingGroup := range *tradingGroups {
 			natural := tradingGroup.Natural
 			synthetics := tradingGroup.Synthetic
-			bssnReturn, bnssReturn, err = checkArbitrage(natural, synthetics, rdb)
-			if err == nil && bssnReturn != prevBssnReturn && bnssReturn != prevBnssReturn {
-				if bssnReturn > EXPECTED_RETURN || bnssReturn > EXPECTED_RETURN {
-					fmt.Println(natural.Symbol, time.Now(), bssnReturn, bnssReturn)
-					prevBssnReturn = bssnReturn
-					prevBnssReturn = bnssReturn
+			bssnReturn[natural.Symbol], bnssReturn[natural.Symbol], err = checkArbitrage(natural, synthetics, rdb)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				now = time.Now()
+				if bssnReturn[natural.Symbol] > EXPECTED_RETURN {
+					fmt.Println(natural.Symbol, now, "Buy synthetic sell natural", bssnReturn[natural.Symbol])
+				}
+
+				if bnssReturn[natural.Symbol] > EXPECTED_RETURN {
+					fmt.Println(natural.Symbol, now, "Buy natural sell synthetic", bnssReturn[natural.Symbol])
 				}
 			}
 		}
+
 		time.Sleep(time.Millisecond)
 	}
 }
