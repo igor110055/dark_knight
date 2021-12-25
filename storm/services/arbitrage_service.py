@@ -1,11 +1,12 @@
 import csv
 from datetime import datetime
 
-from ..models.order_book import OrderBook
-from ..utils import get_logger, logging, redis_lock
+import simplejson as json
+
 from ..clients.redis_client import get_client as get_redis
-from .place_order_service import PlaceOrderService
 from ..exchanges.binance import get_client
+from ..utils import get_logger, logging, redis_lock
+from .place_order_service import PlaceOrderService
 
 binance_client = get_client()
 binance_client.load_markets()
@@ -33,9 +34,8 @@ def get_arbitrage_opportunity(trading_group, expected_return):
     # TODO: separate into different list of symbols, use brpop
     for message in price_update_subscriber.listen():
         if message["type"] == "message":
-            check_arbitrage(
-                natural["symbol"], synthetic, expected_return, redis_client
-            )  # best prices have ttl
+            # TODO: add TTL to best prices
+            check_arbitrage(natural["symbol"], synthetic, expected_return, redis_client)
 
 
 # TODO: refactor two calculate price functions
@@ -102,17 +102,16 @@ def check_arbitrage(
     synthetic_left_symbol = left_synthetic["symbol"]
     synthetic_right_symbol = right_synthetic["symbol"]
 
-    order_book = OrderBook.get(natural_symbol)
-    if not (best_prices_natural := order_book.best_prices):
+    prices = redis_client.mget(
+        natural_symbol, synthetic_left_symbol, synthetic_right_symbol
+    )
+
+    if None in prices:
         return
 
-    left_order_book = OrderBook.get(synthetic_left_symbol)
-    if not (best_prices_left := left_order_book.best_prices):
-        return
-
-    right_order_book = OrderBook.get(synthetic_right_symbol)
-    if not (best_prices_right := right_order_book.best_prices):
-        return
+    best_prices_natural, best_prices_left, best_prices_right = [
+        json.loads(price) for price in prices
+    ]
 
     natural_bid = best_prices_natural["bids"]
     natural_ask = best_prices_natural["asks"]
