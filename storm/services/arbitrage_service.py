@@ -103,7 +103,9 @@ def check_arbitrage(
     synthetic_right_symbol = right_synthetic["symbol"]
 
     prices = redis_client.mget(
-        natural_symbol, synthetic_left_symbol, synthetic_right_symbol
+        f"best_prices:{natural_symbol}",
+        f"best_prices:{synthetic_left_symbol}",
+        f"best_prices:{synthetic_right_symbol}",
     )
 
     if None in prices:
