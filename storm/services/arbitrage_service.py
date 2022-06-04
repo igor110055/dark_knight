@@ -1,4 +1,3 @@
-import csv
 from datetime import datetime
 
 import simplejson as json
@@ -7,6 +6,7 @@ from ..clients.redis_client import get_client as get_redis
 from ..exchanges.binance import get_client
 from ..utils import get_logger, logging, redis_lock
 from .place_order_service import PlaceOrderService
+from .helpers import write_csv
 
 binance_client = get_client()
 binance_client.load_markets()
@@ -38,91 +38,20 @@ def get_arbitrage_opportunity(trading_group, expected_return):
             check_arbitrage(natural["symbol"], synthetic, expected_return, redis_client)
 
 
-# TODO: refactor two calculate price functions
-def calculate_synthetic_ask(
-    best_prices_left, left_assets, best_prices_right, right_assets
-):
-    if left_assets["normal"]:
-        left_synthetic_ask = best_prices_left["asks"]
-    else:
-        bid = best_prices_left["bids"]
-        if not bid:
-            return
-        left_synthetic_ask = 1 / bid
-        # left_synthetic_ask_size = 1 / best_prices_left['bid'][1][0]
-        # left_synthetic_ask_epoch = best_prices_left['bid'][1][1]
-
-    if right_assets["normal"]:
-        right_synthetic_ask = best_prices_right["asks"]
-    else:
-        bid = best_prices_right["bids"]
-        if not bid:
-            return
-        right_synthetic_ask = 1 / bid
-        # right_synthetic_ask_size = 1 / best_prices_right['bid'][1][0]
-        # right_synthetic_ask_epoch = best_prices_right['bid'][1][1]
-
-    return left_synthetic_ask * right_synthetic_ask
-
-
-def calculate_synthetic_bid(
-    best_prices_left, left_assets, best_prices_right, right_assets
-):
-    if left_assets["normal"]:
-        left_synthetic_ask = best_prices_left["bids"]
-        # left_synthetic_ask_size = best_prices_left['bid'][1][0]
-        # left_synthetic_ask_epoch = best_prices_left['bid'][1][1]
-    else:
-        ask = best_prices_left["asks"]
-        if not ask:
-            return
-        left_synthetic_ask = 1 / ask
-        # left_synthetic_ask_size = 1 / best_prices_left['ask'][1][0]
-        # left_synthetic_ask_epoch = best_prices_left['ask'][1][1]
-
-    if right_assets["normal"]:
-        right_synthetic_ask = best_prices_right["bids"]
-        # right_synthetic_ask_size = best_prices_right['bid'][1][0]
-        # right_synthetic_ask_epoch = best_prices_right['bid'][1][1]
-    else:
-        ask = best_prices_right["asks"]
-        if not ask:
-            return
-        right_synthetic_ask = 1 / ask
-        # right_synthetic_ask_size = 1 / best_prices_right['ask'][1][0]
-        # right_synthetic_ask_epoch = best_prices_right['bid'][1][1]
-
-    return left_synthetic_ask * right_synthetic_ask
-
-
 def check_arbitrage(
     natural_symbol, synthetic, target_return, redis_client, upper_bound=0.01
 ):
-    left_synthetic, right_synthetic = synthetic
-    synthetic_left_symbol = left_synthetic["symbol"]
-    synthetic_right_symbol = right_synthetic["symbol"]
 
-    prices = redis_client.mget(
-        f"best_prices:{natural_symbol}",
-        f"best_prices:{synthetic_left_symbol}",
-        f"best_prices:{synthetic_right_symbol}",
-    )
-
-    if None in prices:
-        return
-
-    best_prices_natural, best_prices_left, best_prices_right = [
-        json.loads(price) for price in prices
-    ]
+    best_prices_natural, best_prices_left, best_prices_right = _get_prices(natural_symbol, synthetic)
 
     natural_bid = best_prices_natural["bids"]
     natural_ask = best_prices_natural["asks"]
 
-    synthetic_ask = calculate_synthetic_ask(
-        best_prices_left, left_synthetic, best_prices_right, right_synthetic
+    synthetic_ask = _calculate_synthetic_ask(
+        best_prices_left, left_synthetic['normal'], best_prices_right, right_synthetic['normal']
     )
-    synthetic_bid = calculate_synthetic_bid(
-        best_prices_left, left_synthetic, best_prices_right, right_synthetic
+    synthetic_bid = _calculate_synthetic_bid(
+        best_prices_left, left_synthetic['normal'], best_prices_right, right_synthetic['normal']
     )
 
     if not synthetic_bid or not synthetic_ask:
@@ -221,24 +150,67 @@ def check_arbitrage(
                 lock.degrade = True
 
 
-def write_csv(data, filename="arbitrage.csv"):
-    # logger.info(str(data))
-    with open(filename, "a") as csv_file:
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=[
-                "time",
-                "strategy",
-                "natural",
-                "synthetic_left",
-                "synthetic_right",
-                "natural_bid",
-                "natural_ask",
-                "synthetic_left_bid",
-                "synthetic_left_ask",
-                "synthetic_right_bid",
-                "synthetic_right_ask",
-                "expected_return_perc",
-            ],
-        )
-        writer.writerow(data)
+def _get_prices(natural_symbol, synthetic):
+    left_synthetic, right_synthetic = synthetic
+    synthetic_left_symbol = left_synthetic["symbol"]
+    synthetic_right_symbol = right_synthetic["symbol"]
+
+    prices = redis_client.mget(
+        f"best_prices:{natural_symbol}",
+        f"best_prices:{synthetic_left_symbol}",
+        f"best_prices:{synthetic_right_symbol}",
+    )
+
+    return [
+        json.loads(price) if price else price for price in prices
+    ]
+
+
+def _calculate_synthetic_ask(
+    best_prices_left, left_normal, best_prices_right, right_normal
+):
+    return _calculate_synthetic_price(
+        "asks", best_prices_left, left_normal, best_prices_right, right_normal
+    )
+
+
+def _calculate_synthetic_bid(
+    best_prices_left, left_normal, best_prices_right, right_normal
+):
+    return _calculate_synthetic_price("bids", best_prices_right, right_normal, best_prices_left, left_normal)
+
+
+# TODO: return amount available
+def _calculate_synthetic_price(
+    target_side,
+    target_best_prices,
+    target_normal,
+    opposite_best_prices,
+    opposite_normal,
+):
+    if target_side == "asks":
+        opposite_side = "bids"
+    else:
+        opposite_side = "asks"
+
+    if target_normal:
+        left_synthetic_price = target_best_prices[target_side]
+    else:
+        reciprocal_price = target_best_prices[opposite_side]
+        if not reciprocal_price:
+            return
+        left_synthetic_price = 1 / reciprocal_price
+        # left_synthetic_ask_size = 1 / target_best_prices['bid'][1][0]
+        # left_synthetic_ask_epoch = target_best_prices['bid'][1][1]
+
+    if opposite_normal:
+        right_synthetic_price = opposite_best_prices[target_side]
+    else:
+        reciprocal_price = opposite_best_prices[opposite_side]
+        if not reciprocal_price:
+            return
+        right_synthetic_price = 1 / reciprocal_price
+        # right_synthetic_ask_size = 1 / opposite_best_prices['bid'][1][0]
+        # right_synthetic_ask_epoch = opposite_best_prices['bid'][1][1]
+
+    return left_synthetic_price * right_synthetic_price
